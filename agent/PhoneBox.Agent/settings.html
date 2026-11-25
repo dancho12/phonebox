@@ -182,6 +182,7 @@ table.items td.val { font-family: Consolas, monospace; font-size: 12px; max-widt
 .console-row textarea, .console-row .console-dial { grid-column: 1 / 3; }
 .console-row textarea { font-family: ui-monospace, Consolas, monospace; }
 .console-dial { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cdir-row { display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 8px; }
 .cal-row input[type=color] { width: 44px; height: 34px; padding: 2px; }
 @media (max-width: 700px) { .cal-row { grid-template-columns: 1fr 44px auto; } .feed-row { grid-template-columns: 1fr 1fr auto; } .cam-row { grid-template-columns: 1fr 80px 80px auto; } .cal-row .cal-url { grid-column: 1 / -1; grid-row: 2; } }
 
@@ -858,16 +859,19 @@ nav a.on::before { color: var(--accent); }
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="claude.phoneApprovals"><span></span></label> <span data-i18n="s.claude.askOnPhone">Ask on the phone</span></div>
         <label class="check"><input type="checkbox" data-bind="claude.shareSessionTitles"> <span data-i18n="s.claude.shareSessionTitles">Show Claude Code chat titles on the phone (Claude Code often draws them from your first prompt)</span></label>
         <label class="check"><input type="checkbox" data-bind="claude.watchWsl"> <span data-i18n="s.claude.watchWsl">Also watch Claude Code in WSL: its sessions, and its sign-in for the quota when Windows has none (a stopped distro is never started for this)</span></label>
+        <p class="hint" style="margin:10px 0 6px" data-i18n="s.claude.extraDirs">Other Claude Code accounts for the quota: a label and the folder used as CLAUDE_CONFIG_DIR. Only the label reaches the phone. The label is part of the card id: renaming it changes the id, so pick the account again in widgets set to it.</p>
+        <div id="claudeDirList"></div>
+        <div style="margin-bottom:10px"><button class="btn sm" id="claudeDirAdd" data-i18n="s.claude.extraDirsAdd">＋ Add an account</button></div>
         <label class="check"><input type="checkbox" data-bind="claude.onlyWhenAway"> <span data-i18n="s.claude.onlyWhenAway">Only when I am away from the PC (no keyboard or mouse for a minute)</span></label>
         <label class="check"><input type="checkbox" data-bind="claude.shareConversation"> <span data-i18n="s.claude.shareConversation">Show the conversation on the phone (tap a Claude Code session to see its recent messages and steps; these are your prompts and Claude's replies, sent only to your phone)</span></label>
         <div class="row" style="margin:14px 0 8px"><b style="min-width:92px" data-i18n="s.approvals.cursor">Cursor</b><button class="btn" id="cursorHookBtn" data-i18n="s.claude.installHook">Install hook</button><span class="hint" id="cursorHookState"></span></div>
-        <p class="hint" style="margin:-2px 0 12px 100px" data-i18n="s.cursor.approvalsHint">Cursor's hook runs before every shell command and MCP tool call of its agent, also the ones it would run by itself. While a phone is connected, each one waits for Allow or Deny there; without a phone, or with no answer, Cursor goes on as usual. With "Also watch Cursor in WSL" on, the hook is installed in the running distros too (projects opened over Remote - WSL run their hooks there).</p>
+        <p class="hint" style="margin:-2px 0 12px" data-i18n="s.cursor.approvalsHint">Cursor's hook runs before every shell command and MCP tool call of its agent, also the ones it would run by itself. While a phone is connected, each one waits for Allow or Deny there; without a phone, or with no answer, Cursor goes on as usual. With "Also watch Cursor in WSL" on, the hook is installed in the running distros too (projects opened over Remote - WSL run their hooks there).</p>
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="cursor.phoneApprovals" aria-labelledby="cursorAskOnPhoneLabel"><span></span></label> <span id="cursorAskOnPhoneLabel" data-i18n="s.cursor.askOnPhone">Ask on the phone for Cursor</span></div>
         <div class="field" style="max-width:260px;margin-top:12px"><label data-i18n="s.claude.timeout">Seconds to answer before the terminal takes over</label><input type="number" min="10" max="3600" data-bind="claude.timeoutSec" data-type="int"></div>
         <p class="hint" style="margin:4px 0 0" data-i18n="s.claude.timeoutReinstall">Each hook keeps the seconds it was installed with: after changing them, remove the hook and install it again.</p>
 
         <div class="row" style="margin:14px 0 4px"><b style="min-width:92px">OpenCode</b></div>
-        <p class="hint" style="margin:-2px 0 12px 100px" data-i18n="s.opencode.hint">OpenCode permission prompts and agent questions reach the phone while its background service is running. Off until you turn it on here. Allow always saves the requested pattern for the project, so it arms only after a short countdown.</p>
+        <p class="hint" style="margin:-2px 0 12px" data-i18n="s.opencode.hint">OpenCode permission prompts and agent questions reach the phone while its background service is running. Off until you turn it on here. Allow always saves the requested pattern for the project, so it arms only after a short countdown.</p>
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="opencode.phoneApprovals"><span></span></label> <span data-i18n="s.opencode.askOnPhone">Ask on the phone</span></div>
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="opencode.sessions"><span></span></label> <span data-i18n="s.opencode.sessions">Show OpenCode sessions</span></div>
         <label class="check"><input type="checkbox" data-bind="opencode.shareSessionTitles"> <span data-i18n="s.opencode.shareSessionTitles">Show OpenCode session titles on the phone (OpenCode draws them from the conversation)</span></label>
@@ -2799,6 +2803,20 @@ $('cameraAdd').onclick = () => {
   cfg.cameras.sources.push({ id: cameraId(), name: '', url: '', transport: 'tcp', fps: 5 });
   renderCameras(); changed();
 };
+// Extra Claude Code accounts: blank rows are dropped by the agent when saving
+function renderClaudeDirs() {
+  const dirs = cfg.claude.extraCredentialDirs ??= [];
+  $('claudeDirList').replaceChildren(...dirs.map((d, i) => h('div', { class: 'cdir-row' },
+    h('input', { type: 'text', value: d.label || '', placeholder: 'work', maxlength: '20', oninput: (e) => { d.label = e.target.value; changed(); } }),
+    h('input', { type: 'text', value: d.dir || '', placeholder: '~/.claude-work', spellcheck: 'false', oninput: (e) => { d.dir = e.target.value.trim(); changed(); } }),
+    h('button', { class: 'btn sm danger', onclick: () => { dirs.splice(i, 1); renderClaudeDirs(); changed(); } }, t('s.js.remove')))));
+  $('claudeDirAdd').hidden = dirs.length >= 10;
+}
+$('claudeDirAdd').onclick = () => {
+  cfg.claude.extraCredentialDirs.push({ label: '', dir: '' });
+  renderClaudeDirs(); changed();
+  $('claudeDirList').querySelector('.cdir-row:last-child input')?.focus();
+};
 $('calAdd').onclick = () => {
   cfg.calendars ??= [];
   cfg.calendars.push({ name: '', url: '', color: CAL_COLORS[cfg.calendars.length % CAL_COLORS.length] });
@@ -3803,6 +3821,7 @@ function bindForm() {
     };
   });
   bindCodexBar();
+  renderClaudeDirs();
   renderPhotoSource();
   $('nbv').textContent = Math.round(cfg.night.brightness * 100) + '%';
 }
@@ -3916,7 +3935,7 @@ async function loadInfo() {
 // The form reads every section it binds and renders, so a config without one — an older export, or a
 // hand-trimmed paste in Apply JSON — gets the same defaults a fresh load does before anything renders.
 function fillDefaults() {
-  cfg.pages = fitPages(cfg.pages); cfg.shortcuts ??= []; cfg.rules ??= []; cfg.display ??= {}; cfg.display.wallpaper ??= { dim: 45, blur: 0 }; cfg.night = { enabled: true, start: '00:30', end: '07:30', brightness: 0.02, ...cfg.night }; cfg.weather ??= {}; cfg.weather.unit ??= 'celsius'; cfg.weather.model ??= ''; cfg.photos ??= { source: 'folder', folder: '', subfolders: true, immichUrl: '', immichKey: '', immichAlbum: '', immichAlbumName: '' }; cfg.lan ??= { enabled: false, port: 8766 }; cfg.updates ??= { auto: true, repo: 'ersinkoc/phonebox' }; cfg.claude ??= { phoneApprovals: true, timeoutSec: 90, onlyWhenAway: false, shareSessionTitles: false, shareConversation: false, watchWsl: false }; cfg.opencode ??= { phoneApprovals: false, timeoutSec: 90, onlyWhenAway: false, alwaysCountdownSec: 10, watchWsl: false, shareSessionTitles: false, sessions: false };
+  cfg.pages = fitPages(cfg.pages); cfg.shortcuts ??= []; cfg.rules ??= []; cfg.display ??= {}; cfg.display.wallpaper ??= { dim: 45, blur: 0 }; cfg.night = { enabled: true, start: '00:30', end: '07:30', brightness: 0.02, ...cfg.night }; cfg.weather ??= {}; cfg.weather.unit ??= 'celsius'; cfg.weather.model ??= ''; cfg.photos ??= { source: 'folder', folder: '', subfolders: true, immichUrl: '', immichKey: '', immichAlbum: '', immichAlbumName: '' }; cfg.lan ??= { enabled: false, port: 8766 }; cfg.updates ??= { auto: true, repo: 'ersinkoc/phonebox' }; cfg.claude ??= { phoneApprovals: true, timeoutSec: 90, onlyWhenAway: false, shareSessionTitles: false, shareConversation: false, watchWsl: false }; cfg.claude.extraCredentialDirs ??= []; cfg.opencode ??= { phoneApprovals: false, timeoutSec: 90, onlyWhenAway: false, alwaysCountdownSec: 10, watchWsl: false, shareSessionTitles: false, sessions: false };
   cfg.codexBar ??= { providers: ['claude', 'codex', 'antigravity', 'grok'], rotate: true, pageSize: 2, rotateInterval: 8 };
   for (const [k, v] of Object.entries({ language: 'auto', hour12: false, idleReturnSec: 90, switchCountdownSec: 3, touchGraceSec: 20, minDwellSec: 15, holdMaxMin: 30, keepAwake: true, openOnConnect: true,
     showSeconds: true, vibrate: true, finishToast: true, finishSound: false, finishSoundVolume: 70, volumeKeys: true, artTint: true, nightWhenUnreachable: false, unreachableNightDelayMin: 5, proximityWake: true, orientation: 'landscape', tabletRows: false, theme: 'default', accent: '#2dd4bf' })) cfg.display[k] ??= v;

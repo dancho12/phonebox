@@ -32,6 +32,55 @@ public class ConfigTests
     }
 
     [Fact]
+    public void ExtraClaudeCredentialDirsDropBlankAndRepeatedEntries()
+    {
+        var c = Load("""{"claude":{"extraCredentialDirs":[{"label":" work ","dir":" ~/.claude-work "},{"label":"","dir":"/x"},{"label":"y","dir":""},{"label":"again","dir":"~/.claude-work/"},{"label":"relative","dir":"claude-x"},{"label":"default","dir":"~/.claude"},null]}}""");
+        var d = Assert.Single(c.Claude.ExtraCredentialDirs);
+        Assert.Equal("work", d.Label);
+        Assert.Equal("~/.claude-work", d.Dir);
+        Assert.Empty(Load("{}").Claude.ExtraCredentialDirs);
+    }
+
+    [Fact]
+    public void ExtraClaudeLabelsAreUniqueAndShortBecauseTheyMakeTheCardId()
+    {
+        string Dir(string name) => Path.Combine(Path.GetTempPath(), name); // fully qualified on every platform
+        var c = Load(JsonSerializer.Serialize(new { claude = new { extraCredentialDirs = new[]
+        {
+            new { label = "Work", dir = Dir("a") }, new { label = " work ", dir = Dir("b") },
+            new { label = "a-label-longer-than-twenty", dir = Dir("c") }, new { label = "home", dir = Dir("d") },
+        } } }));
+        Assert.Equal(["Work", "home"], c.Claude.ExtraCredentialDirs.Select(d => d.Label));
+    }
+
+    [Fact]
+    public void ExtraClaudeFoldersAreComparedByTheirFullPath()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "claude-work");
+        var c = Load(JsonSerializer.Serialize(new { claude = new { extraCredentialDirs = new[]
+        {
+            new { label = "work", dir = work },
+            new { label = "dots", dir = Path.Combine(Path.GetTempPath(), "x", "..", "claude-work") },
+            new { label = "here", dir = Path.Combine(Path.GetTempPath(), ".", "claude-work") + Path.DirectorySeparatorChar },
+            new { label = "home", dir = "~/x/../.claude" },
+            new { label = "dot", dir = "~/./.claude" },
+        } } }));
+        Assert.Equal("work", Assert.Single(c.Claude.ExtraCredentialDirs).Label);
+    }
+
+    [Fact]
+    public void AnExtraClaudeFolderThatCantBeMadeFullIsDroppedAndTheRestIsKept()
+    {
+        var c = Load(JsonSerializer.Serialize(new { claude = new { extraCredentialDirs = new[]
+        {
+            // throws in GetFullPath on every platform, like a path past the Windows length limit does there
+            new { label = "nul", dir = Path.Combine(Path.GetTempPath(), "a\0b") },
+            new { label = "work", dir = Path.Combine(Path.GetTempPath(), "claude-work") },
+        } } }));
+        Assert.Equal("work", Assert.Single(c.Claude.ExtraCredentialDirs).Label);
+    }
+
+    [Fact]
     public void EmptyConfigGetsTheDefaultPagesAndFreshTokens()
     {
         var c = Load("{}");

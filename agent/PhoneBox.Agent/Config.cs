@@ -320,6 +320,34 @@ public sealed class ClaudeConfig
     /// <summary>Windows: also show the Claude Code sessions (and use the sign-in for the quota, when Windows has none)
     /// of the running WSL distros' default users. A stopped distro is never started for it (off by default).</summary>
     public bool WatchWsl { get; set; }
+    /// <summary>Other Claude Code config folders (CLAUDE_CONFIG_DIR) whose sign-ins get a quota card each, next to
+    /// ~/.claude. Read only, like the default one. Paths stay on this computer; the phone only sees the labels.</summary>
+    public ClaudeCredentialDir[] ExtraCredentialDirs { get; set; } = [];
+}
+
+public sealed class ClaudeCredentialDir
+{
+    /// <summary>Longest label kept: it is part of the card id (claude@label) that widgets are set to.</summary>
+    public const int MaxLabel = 20;
+    public string Label { get; set; } = "";
+    public string Dir { get; set; } = "";
+    /// <summary>The folder with a leading ~ turned into the home folder.</summary>
+    public string FullPath() => Dir.StartsWith('~') ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + Dir[1..] : Dir;
+    /// <summary>One identity for the folder however it is spelled: the full path without a trailing separator, case
+    /// folded on Windows and macOS (their volumes are case-insensitive by default), kept on Linux. Its reader, schedule and cache follow it.</summary>
+    public string Key() => KeyOf(FullPath());
+    /// <summary><see cref="Key"/>, or null for a path that can't be made full (a NUL, too long): that entry is dropped.</summary>
+    public string? TryKey()
+    {
+        try { return Key(); }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException) { return null; }
+    }
+    internal static string KeyOf(string path)
+    {
+        var p = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        // shortcut: a case-sensitive macOS volume can't hold two accounts whose folders differ only in case; probe the volume if anyone needs that
+        return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? p.ToLowerInvariant() : p;
+    }
 }
 
 public sealed class CursorConfig
@@ -797,6 +825,14 @@ public sealed partial class ConfigStore(string path)
         if (c.Ping.Host.Length > 253 || c.Ping.Host.Any(ch => ch <= ' ' || ch > '~')) c.Ping.Host = PingMonitor.DefaultHost;
         c.Claude ??= new();
         c.Claude.TimeoutSec = Math.Clamp(c.Claude.TimeoutSec, 10, 3600);
+        // only absolute folders (or ~/…), each once however it is spelled, and never ~/.claude itself: it is read already
+        var defaultClaude = ClaudeCredentialDir.KeyOf(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude"));
+        c.Claude.ExtraCredentialDirs = (c.Claude.ExtraCredentialDirs ?? [])
+            .OfType<ClaudeCredentialDir>()
+            .Select(d => new ClaudeCredentialDir { Label = d.Label?.Trim() ?? "", Dir = d.Dir?.Trim() ?? "" })
+            .Select(d => (d, key: d.Label.Length is > 0 and <= ClaudeCredentialDir.MaxLabel && System.IO.Path.IsPathFullyQualified(d.FullPath()) ? d.TryKey() : null))
+            .Where(x => x.key is not null && x.key != defaultClaude)
+            .DistinctBy(x => x.key).Select(x => x.d).DistinctBy(d => d.Label, StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
         c.Cursor ??= new();
         c.Antigravity ??= new();
         c.OpenCode ??= new();
