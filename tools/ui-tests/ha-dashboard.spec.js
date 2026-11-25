@@ -27,6 +27,9 @@ test('the dashboard opens from the address in Settings, in a frame of its own or
   await expect(frame).toHaveAttribute('src', server + '/desk-panel/home');
   await expect(frame).toHaveAttribute('sandbox', /allow-same-origin/);
   await expect(page.locator('.w-hadash')).toHaveClass(/bare-html/); // no card background by default
+  // no card around it, and not clipped to rounded corners (WebView would drop the page's own rounded clips)
+  const box = await page.locator('.w-hadash').evaluate((e) => { const c = getComputedStyle(e); return [c.backgroundColor, c.overflow, c.borderRadius]; });
+  expect(box).toEqual(['rgba(0, 0, 0, 0)', 'visible', '0px']);
   // the token stays with the agent
   const config = await page.evaluate(() => fetch('/agent/api/config').then((r) => r.text()));
   expect(JSON.parse(config).config.homeAssistant).toEqual({ url: server + '/' });
