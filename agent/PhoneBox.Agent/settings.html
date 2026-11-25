@@ -2192,6 +2192,19 @@ function optionField(w, o, onValChange) {
       } }), rich(`${p.icon || ''} ${p.title || p.id}`.trim())))));
     }
     case 'ha-items': return haItemsEditor(w, o, set);
+    case 'ha-dashboard': {
+      // free text (any "dashboard/view" path) with the dashboards Home Assistant lists as suggestions
+      const list = h('datalist', { id: 'ha-dashboards-' + Math.random().toString(36).slice(2) });
+      const input = h('input', { type: 'text', value: v ?? '', placeholder: 'lovelace/0', spellcheck: 'false', style: { flex: '1', minWidth: '0' }, oninput: (e) => set(o.key, e.target.value.trim()) });
+      input.setAttribute('list', list.id);
+      const status = h('span', { class: 'hint' });
+      const load = () => fetch('/api/ha/dashboards').then((r) => r.json()).then((d) => {
+        status.textContent = d.error || '';
+        list.replaceChildren(...(d.views || []).map((x) => h('option', { value: x.path }, x.name)));
+      }).catch(() => {});
+      load();
+      return field(h('div', { class: 'row', style: { gap: '8px' } }, input, h('button', { class: 'btn sm', onclick: load }, t('s.js.refresh'))), list, status);
+    }
     case 'steam-games': return steamGamesEditor(w, o, set);
     case 'plex-playlists': return plexPlaylistsEditor(w, o, set);
     case 'shortcuts': {

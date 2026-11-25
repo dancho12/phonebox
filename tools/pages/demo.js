@@ -150,6 +150,8 @@
       // bridge: the agent says whether this computer has a phone bridge (macOS) and whether its switch is on; the demo has
       // none, so only a config that sets it carries it (see bridge-overview.spec.js)
       ...(c.bridge ? { bridge: { clipboard: !!c.bridge.clipboard, supported: c.bridge.supported === true } } : {}),
+      // like the agent: the Home Assistant address (never the token), only while a page has a Home Assistant dashboard widget
+      homeAssistant: (c.pages || []).some((p) => (p.widgets || []).some((w) => w.type === 'hadash')) ? { url: c.homeAssistant?.url ?? null } : null,
     };
   }
 
@@ -880,6 +882,8 @@
       return obsAct(path.slice(9), q.get('scene')) ? json({ ok: true }) : json({ error: 'unknown action' }, 400);
     }
     if (path === '/api/ha/entities') return json({ configured: true, error: null, entities: Object.keys(ha).sort().map((id) => ({ id, name: ha[id].name, switchable: /^(light|switch|lock|scene)\./.test(id) })) });
+    if (path === '/api/ha/dashboards') return json({ configured: true, error: null, views: [
+      { path: 'lovelace/0', name: 'Overview › Home' }, { path: 'desk-panel/home', name: 'Desk panel › Home' }, { path: 'desk-panel/climate', name: 'Desk panel › Climate' }] });
     if (path === '/api/ha/states') return json(haStates((q.get('ids') || '').split(',').filter(Boolean)));
     if (path.startsWith('/api/ha/toggle/') && method === 'POST') { haToggle(decodeURIComponent(path.slice(15))); return json({ ok: true }); }
     if (path.startsWith('/api/docker/') && method === 'POST') {

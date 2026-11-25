@@ -161,6 +161,95 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
         catch (Exception ex) { return new { configured = true, error = ex is TaskCanceledException ? "Home Assistant did not answer" : ex.Message, entities = Array.Empty<object>() }; }
     }
 
+    /// <summary>
+    /// The dashboards and their views ("dashboard/view" paths with a name), for the Home Assistant dashboard widget's
+    /// picker in Settings. Read over Home Assistant's WebSocket API, the only one that lists dashboards (which needs an
+    /// administrator's token). Local only: the phone never gets this.
+    /// </summary>
+    public async Task<object> ListDashboardsAsync()
+    {
+        var ha = config.Get().HomeAssistant;
+        if (string.IsNullOrWhiteSpace(ha.Url) || string.IsNullOrWhiteSpace(ha.Token)
+            || !Uri.TryCreate(ha.Url.TrimEnd('/') + "/api/websocket", UriKind.Absolute, out var http) || http.Scheme is not ("http" or "https"))
+            return new { configured = false, error = "Set up Home Assistant in Settings › General", views = Array.Empty<object>() };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var ct = timeout.Token;
+        try
+        {
+            using var ws = new System.Net.WebSockets.ClientWebSocket();
+            await ws.ConnectAsync(new UriBuilder(http) { Scheme = http.Scheme == "https" ? "wss" : "ws" }.Uri, ct);
+            var nextId = 0;
+            async Task<JsonElement> Receive()
+            {
+                using var buffer = new MemoryStream();
+                var chunk = new byte[16 * 1024];
+                System.Net.WebSockets.WebSocketReceiveResult r;
+                do
+                {
+                    r = await ws.ReceiveAsync(chunk, ct);
+                    if (r.MessageType == System.Net.WebSockets.WebSocketMessageType.Close) throw new InvalidOperationException("Home Assistant closed the connection");
+                    buffer.Write(chunk, 0, r.Count);
+                    if (buffer.Length > 8 * 1024 * 1024) throw new InvalidOperationException("Home Assistant sent too much");
+                } while (!r.EndOfMessage);
+                using var doc = JsonDocument.Parse(buffer.ToArray());
+                return doc.RootElement.Clone();
+            }
+            Task Send(Dictionary<string, object?> message) =>
+                ws.SendAsync(JsonSerializer.SerializeToUtf8Bytes(message), System.Net.WebSockets.WebSocketMessageType.Text, true, ct);
+            async Task<JsonElement?> Call(Dictionary<string, object?> command)
+            {
+                var id = ++nextId;
+                command["id"] = id;
+                await Send(command);
+                while (true)
+                {
+                    var m = await Receive();
+                    if (!m.TryGetProperty("id", out var mid) || mid.ValueKind != JsonValueKind.Number || mid.GetInt32() != id) continue;
+                    return m.TryGetProperty("success", out var ok) && ok.ValueKind == JsonValueKind.True && m.TryGetProperty("result", out var result) ? result : null;
+                }
+            }
+
+            await Receive(); // auth_required
+            await Send(new() { ["type"] = "auth", ["access_token"] = ha.Token });
+            var auth = await Receive();
+            if (!auth.TryGetProperty("type", out var authType) || authType.GetString() != "auth_ok")
+                return new { configured = true, error = "The token was rejected", views = Array.Empty<object>() };
+
+            // the default dashboard (no url_path, at /lovelace) and the ones added in Settings › Dashboards
+            var dashboards = new List<(string? Path, string Name)> { (null, "Overview") };
+            if (await Call(new() { ["type"] = "lovelace/dashboards/list" }) is { ValueKind: JsonValueKind.Array } list)
+                foreach (var d in list.EnumerateArray())
+                    if (d.TryGetProperty("url_path", out var p) && p.GetString() is { Length: > 0 } path)
+                        dashboards.Add((path, d.TryGetProperty("title", out var n) && n.GetString() is { Length: > 0 } title ? title : path));
+
+            var views = new List<object>();
+            foreach (var (path, name) in dashboards)
+            {
+                var root = path ?? "lovelace";
+                var command = new Dictionary<string, object?> { ["type"] = "lovelace/config" };
+                if (path is not null) command["url_path"] = path;
+                var listed = 0;
+                if (await Call(command) is { ValueKind: JsonValueKind.Object } conf && conf.TryGetProperty("views", out var vs) && vs.ValueKind == JsonValueKind.Array)
+                    foreach (var v in vs.EnumerateArray())
+                    {
+                        var key = v.TryGetProperty("path", out var vp) && vp.GetString() is { Length: > 0 } viewPath ? viewPath : listed.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        var title = v.TryGetProperty("title", out var vt) && vt.GetString() is { Length: > 0 } viewTitle ? viewTitle : key;
+                        views.Add(new { path = $"{root}/{key}", name = $"{name} › {title}" });
+                        listed++;
+                    }
+                // a dashboard made by a strategy (the default one, until it is taken over) has no views of its own to list
+                if (listed == 0) views.Add(new { path = root, name });
+            }
+            try { await ws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, null, CancellationToken.None); } catch { /* closing is a courtesy */ }
+            return new { configured = true, error = (string?)null, views };
+        }
+        catch (Exception ex)
+        {
+            log.LogDebug(ex, "Home Assistant dashboards");
+            return new { configured = true, error = ex is OperationCanceledException ? "Home Assistant did not answer" : ex.Message, views = Array.Empty<object>() };
+        }
+    }
+
     private static bool Switchable(string domain) => domain is "light" or "switch" or "fan" or "input_boolean" or "automation" or "siren" or "humidifier"
         or "group" or "cover" or "media_player" or "scene" or "script" or "button" or "input_button" or "lock" or "vacuum";
 

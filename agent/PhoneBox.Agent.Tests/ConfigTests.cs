@@ -444,6 +444,25 @@ public class ConfigTests
         Assert.Contains("\"T\"", json);
     }
 
+    // The Home Assistant dashboard widget opens the server from the phone: the phone gets the address, only while one of
+    // its pages has such a widget (also inside a Smart Stack), and never the token.
+    [Theory]
+    [InlineData("""{ "type": "hadash", "x": 0, "y": 0, "w": 12, "h": 6 }""", true)]
+    [InlineData("""{ "type": "stack", "x": 0, "y": 0, "w": 6, "h": 3, "options": { "widgets": [ { "id": "a", "type": "hadash" } ] } }""", true)]
+    [InlineData("""{ "type": "ha", "x": 0, "y": 0, "w": 6, "h": 3 }""", false)]
+    public void ThePhoneGetsTheHomeAssistantAddressOnlyForADashboardWidget(string widget, bool sent)
+    {
+        var c = Load($$"""
+        { "homeAssistant": { "url": "http://192.168.1.10:8123", "token": "secret-ha-token" },
+          "pages": [ { "id": "p", "title": "P", "widgets": [ {{widget}} ] } ] }
+        """);
+        var pub = JsonSerializer.SerializeToElement(c.ToPublic(), ConfigStore.WriteOpts);
+        Assert.DoesNotContain("secret-ha-token", pub.GetRawText());
+        var ha = pub.TryGetProperty("homeAssistant", out var x) ? x : default;
+        if (sent) Assert.Equal("http://192.168.1.10:8123", ha.GetProperty("url").GetString());
+        else Assert.True(ha.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined);
+    }
+
     [Fact]
     public void ThePhoneLearnsWhichShortcutPicturesAreUploads()
     {
