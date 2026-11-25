@@ -13,6 +13,8 @@ panel draws them its own way.)
 2. **A Home Assistant user for the phone**, best one without administrator rights. The phone either signs in once in
    the widget (Home Assistant remembers it) or is trusted by its address (`trusted_networks` with
    `allow_bypass_login`), so it never sees a sign-in page.
+   With `trusted_networks`, give Home Assistant by its IPv4 address (`http://192.168.1.10:8123`): by a name such as
+   `homeassistant.local` the phone often connects over IPv6, from addresses that change, and is not recognized.
 3. **Home Assistant allowed in a frame**: `use_x_frame_options: false` under `http:` in `configuration.yaml`. By
    default Home Assistant refuses to be shown inside another app, and the widget stays empty.
 
