@@ -215,12 +215,17 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
             if (!auth.TryGetProperty("type", out var authType) || authType.GetString() != "auth_ok")
                 return new { configured = true, error = "The token was rejected", views = Array.Empty<object>() };
 
-            // the default dashboard (no url_path, at /lovelace) and the ones added in Settings › Dashboards
+            // the default dashboard (at /lovelace, read without a url_path) and the ones added in Settings › Dashboards.
+            // Newer Home Assistant versions list the default one too, with the title it was given.
             var dashboards = new List<(string? Path, string Name)> { (null, "Overview") };
             if (await Call(new() { ["type"] = "lovelace/dashboards/list" }) is { ValueKind: JsonValueKind.Array } list)
                 foreach (var d in list.EnumerateArray())
                     if (d.TryGetProperty("url_path", out var p) && p.GetString() is { Length: > 0 } path)
-                        dashboards.Add((path, d.TryGetProperty("title", out var n) && n.GetString() is { Length: > 0 } title ? title : path));
+                    {
+                        var name = d.TryGetProperty("title", out var n) && n.GetString() is { Length: > 0 } title ? title : path;
+                        if (path == "lovelace") dashboards[0] = (null, name);
+                        else dashboards.Add((path, name));
+                    }
 
             var views = new List<object>();
             foreach (var (path, name) in dashboards)
