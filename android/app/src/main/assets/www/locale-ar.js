@@ -1470,6 +1470,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "Next up": "الحدث القادم",
       "Nightstand": "طاولة معيشة",
       "No card background": "لا يوجد خلفية للبطاقات",
+      "Web page address (shown instead of the HTML)": "عنوان صفحة ويب (تُعرض بدلًا من HTML)",
       "No vibration": "لا اهتزاز",
       "Normal": "المعدل الطبيعي",
       "Normal vibration": "اهتزاز طبيعي",

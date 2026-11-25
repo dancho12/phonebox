@@ -1435,6 +1435,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "Next up": "Next up",
       "Nightstand": "Noční stolek",
       "No card background": "Žádné pozadí karty",
+      "Web page address (shown instead of the HTML)": "Adresa webové stránky (zobrazí se místo HTML)",
       "No vibration": "Žádné vibrace",
       "Normal": "Normální",
       "Normal vibration": "Normální vibrace",

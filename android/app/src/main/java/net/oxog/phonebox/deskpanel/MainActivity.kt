@@ -58,7 +58,8 @@ import java.util.Locale
  * Full-screen desk panel. The UI is plain HTML/JS bundled in assets/www.
  * The UI calls "/agent/..." URLs; they are intercepted here and forwarded to the PhoneBox agent on the PC,
  * over USB (adb reverse) or, once paired, over Wi-Fi / Tailscale (see AgentLink). The WebView itself therefore
- * never makes local-network requests (no CORS, mixed-content or local-network-access issues).
+ * never makes local-network requests for the panel (no CORS, mixed-content or local-network-access issues); only a web
+ * page that a Custom HTML widget shows by address loads from the network, in its own frame and origin.
  */
 class MainActivity : Activity(), SensorEventListener {
 
@@ -88,6 +89,11 @@ class MainActivity : Activity(), SensorEventListener {
 
     private val assetLoader by lazy {
         WebViewAssetLoader.Builder()
+            // The panel is served over http: a web page shown by address (Custom HTML widget) may be plain http on the
+            // home network, and inside an https panel WebView would block its images as mixed content. The panel never
+            // goes to the network (the asset loader answers), uses no API that needs a secure context, and the agent
+            // calls are still guarded by the key only the panel receives.
+            .setHttpAllowed(true)
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
     }
@@ -448,7 +454,10 @@ class MainActivity : Activity(), SensorEventListener {
             mediaPlaybackRequiresUserGesture = false
             cacheMode = WebSettings.LOAD_NO_CACHE
             textZoom = 100
+            // a web page shown by address may be plain http, and may need its own cookies (a sign-in)
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
+        android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         web.isVerticalScrollBarEnabled = false
         web.isHorizontalScrollBarEnabled = false
         web.isHapticFeedbackEnabled = false
@@ -473,15 +482,17 @@ class MainActivity : Activity(), SensorEventListener {
             // Old WebView without document-start scripts: hand the bridge key to the main frame only (evaluateJavascript
             // never runs in iframes), and only when it shows the panel. Bridge calls before it arrives get nothing.
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) = giveKey(view, url)
-            override fun onPageFinished(view: WebView, url: String?) = giveKey(view, url)
+            override fun onPageFinished(view: WebView, url: String?) {
+                if (storageMove != 0) moveStorageStep(view, url) else giveKey(view, url)
+            }
         }
         if (documentStartKey)
-            WebViewCompat.addDocumentStartJavaScript(web, panelBootstrap(), setOf("https://$ASSET_HOST"))
+            WebViewCompat.addDocumentStartJavaScript(web, panelBootstrap(), setOf(PANEL_ORIGIN))
         web.addJavascriptInterface(Bridge(), "Android")
         // Lets you debug the panel from the computer via chrome://inspect.
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
 
-        web.loadUrl("https://$ASSET_HOST/assets/www/index.html")
+        if (panelPreferences.getBoolean(STORAGE_MOVED, false)) loadPanel() else moveStorage()
         hideSystemUi()
         if (savedInstanceState == null) standbyNoteAgentWake(intent)   // not again after a configuration change
         handlePairingLink(intent)
@@ -773,8 +784,42 @@ class MainActivity : Activity(), SensorEventListener {
         return "window.__phoneboxKey='$bridgeKey';window.__phoneboxLanguages=$languages;"
     }
 
+    private fun loadPanel() = web.loadUrl("$PANEL_ORIGIN/assets/www/index.html")
+
+    // The panel used to be served from https://$ASSET_HOST. Its localStorage (the settings kept for an offline start,
+    // counters, timers, checklists) belongs to that origin, so it is copied over once, before the panel first starts on
+    // http: read on an empty page of the old origin, written on one of the new, keeping anything already there.
+    private var storageMove = 0 // 1: reading the old origin, 2: writing to the new one, 0: done
+    private var movedStorage = "null"
+
+    private fun moveStorage() {
+        storageMove = 1
+        web.loadUrl("https://$ASSET_HOST/assets/www/storage-move.html")
+    }
+
+    private fun moveStorageStep(view: WebView, url: String?) {
+        if (storageMove == 1 && url?.startsWith("https://$ASSET_HOST/") == true) {
+            storageMove = 2
+            view.evaluateJavascript("JSON.stringify(Object.fromEntries(Object.keys(localStorage).map((k) => [k, localStorage.getItem(k)])))") { saved ->
+                if (destroyed) return@evaluateJavascript
+                movedStorage = saved ?: "null" // a JSON string literal holding the JSON of the entries, or null
+                view.loadUrl("$PANEL_ORIGIN/assets/www/storage-move.html")
+            }
+        } else if (storageMove == 2 && url?.startsWith("$PANEL_ORIGIN/") == true) {
+            storageMove = 0
+            val write = "(() => { try { const old = JSON.parse($movedStorage) || {};" +
+                " for (const [k, v] of Object.entries(old)) if (localStorage.getItem(k) === null) localStorage.setItem(k, v);" +
+                " return true; } catch (_) { return false; } })()"
+            view.evaluateJavascript(write) {
+                if (destroyed) return@evaluateJavascript
+                panelPreferences.edit().putBoolean(STORAGE_MOVED, true).apply()
+                loadPanel()
+            }
+        }
+    }
+
     private fun giveKey(view: WebView, url: String?) {
-        if (!documentStartKey && url?.startsWith("https://$ASSET_HOST/") == true)
+        if (!documentStartKey && url?.startsWith("$PANEL_ORIGIN/") == true)
             view.evaluateJavascript(panelBootstrap(), null)
     }
 
@@ -1036,6 +1081,8 @@ class MainActivity : Activity(), SensorEventListener {
 
     companion object {
         private const val ASSET_HOST = "appassets.androidplatform.net"
+        private const val PANEL_ORIGIN = "http://$ASSET_HOST"
+        private const val STORAGE_MOVED = "storage-moved-to-http"
         private val NO_STORE = mapOf("Cache-Control" to "no-store")
         private const val PANEL_HEADER = "X-PhoneBox-Panel"
         private val READ_ONLY_IMAGES = setOf("/agent/api/art", "/agent/api/procs/icon", "/agent/api/controls/radio-logo", "/agent/api/apps/icon", "/agent/api/discord/img", "/agent/api/shortcuts/icon",

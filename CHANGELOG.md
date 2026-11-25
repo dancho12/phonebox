@@ -72,6 +72,11 @@
 - README: the Games Tab add-on's row lists its Steam store lookup (#612, [lucasaz](https://github.com/lucasaz)).
 - Development: an `.editorconfig` with the style the code already follows, and the agent builds without warnings on
   Windows (#615, [elong365](https://github.com/elong365)).
+- Custom HTML: **Web page address** shows a web page instead of your own HTML, such as a Home Assistant dashboard,
+  Grafana or a camera on the home network. Plain http addresses work too (the panel is now served over http inside
+  the app, so the page and its pictures are not blocked as mixed content). The page runs in its own origin and keeps
+  its sign-in, cannot reach the panel or navigate it away, and is not clipped to the card's rounded corners, because
+  Android WebView then drops the rounded corners the page draws itself.
 
 ## 0.9.30 — 2026-11-25
 

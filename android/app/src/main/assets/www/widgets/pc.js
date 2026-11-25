@@ -20,6 +20,19 @@ W.html = {
   create(box, { o }) {
     if (o.transparent) box.classList.add('bare-html');
     const frame = h('iframe', 'html-frame');
+    // A web page by address (options.url, http or https): it loads in its own origin, so it keeps its storage and
+    // cookies (a Home Assistant dashboard needs them) yet cannot reach the panel; it may not navigate the panel away.
+    const url = typeof o.url === 'string' && /^https?:\/\//i.test(o.url.trim()) ? o.url.trim() : '';
+    if (url) {
+      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads');
+      frame.setAttribute('allow', 'fullscreen; autoplay');
+      frame.src = url;
+      // Not clipped by the card's rounded corners: Android WebView then drops the page's own rounded clips (cards
+      // of a Home Assistant dashboard draw their graphs and blurred art as plain rectangles).
+      box.classList.add('url-html');
+      box.append(frame);
+      return { update() {}, destroy() {} };
+    }
     frame.setAttribute('sandbox', 'allow-scripts');
     frame.setAttribute('referrerpolicy', 'no-referrer');
     frame.srcdoc = HTML_PRELUDE + (o.html || '');

@@ -817,6 +817,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "Next up": "Sıradaki",
       "Nightstand": "Gecelik",
       "No card background": "Kart arka planı yok",
+      "Web page address (shown instead of the HTML)": "Web sayfası adresi (HTML yerine gösterilir)",
       "No vibration": "Titreşim yok.",
       "Normal": "Normal",
       "Normal vibration": "Normal titreşim",

@@ -1435,6 +1435,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "Next up": "다음",
       "Nightstand": "밤상자",
       "No card background": "카드 배경 없음",
+      "Web page address (shown instead of the HTML)": "웹 페이지 주소 (HTML 대신 표시)",
       "No vibration": "진동 없음",
       "Normal": "일반",
       "Normal vibration": "정상 진동",
