@@ -73,27 +73,37 @@ W.html = {
 // A Home Assistant dashboard as it is: the phone opens the server itself (the address in Settings › General, which the
 // agent sends without the token, or the widget's own), and Home Assistant signs it in as one of its users. Until the
 // server answers, the widget says so and keeps trying; when it answers again after an outage, the page is reloaded.
+// Without an address of its own the widget tries the one from Settings first, then the IP addresses the computer found
+// for a .local name: the computer may be on another network than the phone, so the first one that answers is used.
 const HA_DASH_PATH = /^[\w.~-]+(\/[\w.~-]+)*$/;
 W.hadash = {
   needs: [],
   create(box, { o }) {
     if (o.transparent !== false) box.classList.add('bare-html');
-    const base = httpUrl(o.address) || httpUrl(cfg.homeAssistant?.url);
+    const own = httpUrl(o.address);
+    const bases = [...new Set((own ? [own] : [cfg.homeAssistant?.url, ...(cfg.homeAssistant?.alternatives || [])])
+      .map(httpUrl).filter(Boolean).map((b) => b.replace(/\/+$/, '')))];
     const message = (text) => box.replaceChildren(h('div', 'empty', text));
-    if (!base) { message(t('w.hadash.setup')); return { update() {}, destroy() {} }; }
+    if (!bases.length) { message(t('w.hadash.setup')); return { update() {}, destroy() {} }; }
     const path = String(o.dashboard || '').trim().replace(/^\/+|\/+$/g, '');
-    const url = base.replace(/\/+$/, '') + '/' + (HA_DASH_PATH.test(path) ? path : 'lovelace');
-    let frame = null, down = false, timer = 0, gone = false;
-    const check = async () => {
-      if (gone) return;
+    const page = '/' + (HA_DASH_PATH.test(path) ? path : 'lovelace');
+    // a no-cors request: it fails only when the server cannot be reached, which is all this needs to know
+    const answers = async (base) => {
       const abort = new AbortController();
       const stop = setTimeout(() => abort.abort(), 8000);
-      let up = false;
-      // a no-cors request: it fails only when the server cannot be reached, which is all this needs to know
-      try { await fetch(base.replace(/\/+$/, '') + '/manifest.json', { mode: 'no-cors', cache: 'no-store', signal: abort.signal }); up = true; } catch (_) {}
-      clearTimeout(stop);
+      try { await fetch(base + '/manifest.json', { mode: 'no-cors', cache: 'no-store', signal: abort.signal }); return true; } catch (_) { return false; } finally { clearTimeout(stop); }
+    };
+    let frame = null, shown = '', down = false, timer = 0, gone = false;
+    const check = async () => {
       if (gone) return;
-      if (up && (!frame || down)) { box.replaceChildren(); frame = webFrame(box, url); }
+      // the address in use first, then the others in order
+      let up = '';
+      for (const base of shown ? [shown, ...bases.filter((b) => b !== shown)] : bases) {
+        if (await answers(base)) { up = base; break; }
+        if (gone) return;
+      }
+      if (gone) return;
+      if (up && (!frame || down || up !== shown)) { box.replaceChildren(); frame = webFrame(box, up + page); shown = up; }
       else if (!up && !frame) message(t('w.hadash.offline'));
       down = !up;
       timer = setTimeout(check, up ? 60000 : 15000);

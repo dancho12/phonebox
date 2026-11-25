@@ -2205,9 +2205,13 @@ function optionField(w, o, onValChange) {
       } });
       const status = h('div', { class: 'hint' });
       const opens = h('div', { class: 'hint' });
+      // as the phone does: the widget's own address, or the one from Settings and then the addresses the computer found
+      // for a .local name (the first that answers on the phone is used)
       const opensLine = () => {
-        const base = (String(w.options?.address || '').trim() || answer?.phoneUrl || '').replace(/\/+$/, '');
-        opens.replaceChildren(...(base ? [t('s.hadash.opens') + ': ', h('code', {}, base + '/' + (value.replace(/^\/+|\/+$/g, '') || 'lovelace'))] : []));
+        const own = String(w.options?.address || '').trim();
+        const bases = (own ? [own] : [answer?.phoneUrl, ...(answer?.alternatives || [])]).filter(Boolean).map((b) => b.replace(/\/+$/, ''));
+        const page = '/' + (value.replace(/^\/+|\/+$/g, '') || 'lovelace');
+        opens.replaceChildren(...(bases.length ? [t('s.hadash.opens') + ': ', ...bases.flatMap((b, i) => [i ? ' · ' : '', h('code', {}, b + page)])] : []));
       };
       const fill = () => {
         const known = views.some((x) => x.path === value);

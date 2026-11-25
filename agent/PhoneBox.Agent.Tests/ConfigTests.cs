@@ -463,20 +463,21 @@ public class ConfigTests
         else Assert.True(ha.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined);
     }
 
-    // Android's WebView often cannot find a .local name (mDNS): the phone gets the address it has on this computer.
+    // Some Android versions cannot find a .local name (mDNS) in a WebView: the phone may also try the addresses the name
+    // has on this computer (after the name itself: this computer may be on another network than the phone).
     [Theory]
-    [InlineData("http://homeassistant.local:8123", "http://192.168.1.10:8123")]
-    [InlineData("http://homeassistant.local:8123/", "http://192.168.1.10:8123/")]
-    [InlineData("https://HA.local", "https://192.168.1.10")]
-    [InlineData("http://192.168.1.20:8123", "http://192.168.1.20:8123")]   // an address goes as it is
-    [InlineData("https://ha.example.com", "https://ha.example.com")]      // so does a name in DNS
-    [InlineData("homeassistant.local:8123", "homeassistant.local:8123")]  // not a URL: left for the phone to report
-    public void APhoneGetsTheIpAddressOfALocalName(string url, string expected) =>
-        Assert.Equal(expected, HaAddress.ForPhone(url, host => host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ? "192.168.1.10" : null));
+    [InlineData("http://homeassistant.local:8123", "http://192.168.1.10:8123|http://172.31.0.5:8123")]
+    [InlineData("http://homeassistant.local:8123/", "http://192.168.1.10:8123/|http://172.31.0.5:8123/")]
+    [InlineData("https://HA.local", "https://192.168.1.10|https://172.31.0.5")]
+    [InlineData("http://192.168.1.20:8123", "")]           // an address needs nothing else
+    [InlineData("https://ha.example.com", "")]             // nor does a name in DNS
+    [InlineData("homeassistant.local:8123", "")]           // not a URL
+    public void ALocalNameComesWithTheAddressesItHasHere(string url, string expected) =>
+        Assert.Equal(expected, string.Join('|', HaAddress.Alternatives(url, host => host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ? ["192.168.1.10", "172.31.0.5"] : [])));
 
     [Fact]
-    public void ALocalNameThatCannotBeFoundGoesAsItIs() =>
-        Assert.Equal("http://nowhere.local:8123", HaAddress.ForPhone("http://nowhere.local:8123", _ => null));
+    public void ALocalNameThatCannotBeFoundHasNoAlternatives() =>
+        Assert.Empty(HaAddress.Alternatives("http://nowhere.local:8123", _ => []));
 
     [Fact]
     public void ThePhoneLearnsWhichShortcutPicturesAreUploads()

@@ -151,7 +151,7 @@
       // none, so only a config that sets it carries it (see bridge-overview.spec.js)
       ...(c.bridge ? { bridge: { clipboard: !!c.bridge.clipboard, supported: c.bridge.supported === true } } : {}),
       // like the agent: the Home Assistant address (never the token), only while a page has a Home Assistant dashboard widget
-      homeAssistant: (c.pages || []).some((p) => (p.widgets || []).some((w) => w.type === 'hadash')) ? { url: c.homeAssistant?.url ?? null } : null,
+      homeAssistant: (c.pages || []).some((p) => (p.widgets || []).some((w) => w.type === 'hadash')) ? { url: c.homeAssistant?.url ?? null, alternatives: c.homeAssistant?.alternatives ?? [] } : null, // alternatives: what the agent finds for a .local name
     };
   }
 

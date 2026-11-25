@@ -32,7 +32,7 @@ test('the dashboard opens from the address in Settings, in a frame of its own or
   expect(box).toEqual(['rgba(0, 0, 0, 0)', 'visible', '0px']);
   // the token stays with the agent
   const config = await page.evaluate(() => fetch('/agent/api/config').then((r) => r.text()));
-  expect(JSON.parse(config).config.homeAssistant).toEqual({ url: server + '/' });
+  expect(JSON.parse(config).config.homeAssistant).toEqual({ url: server + '/', alternatives: [] });
   expect(config).not.toContain('secret-token');
   expect(errors).toEqual([]);
 });
@@ -84,4 +84,11 @@ test('a saved path Home Assistant does not list shows as another path', async ({
   await expect(page.locator('input[placeholder="dashboard/view"]')).toHaveValue('old-panel/0');
   const select = page.locator('.field select').filter({ has: page.locator('option', { hasText: 'Another path…' }) });
   await expect(select.locator('option:checked')).toHaveText('Another path… old-panel/0');
+});
+
+test('without an address of its own the widget uses the first address that answers', async ({ page, baseURL }) => {
+  // the name from Settings does not answer on this network; the address the computer found for it does
+  const server = new URL(baseURL).origin;
+  await open(page, '/panel/', { dashboard: 'desk-panel/home' }, { url: 'http://127.0.0.1:9', token: 't', alternatives: [server] });
+  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home');
 });

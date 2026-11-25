@@ -21,8 +21,8 @@ panel draws them its own way.)
 - **Dashboard and view**: pick one from the list Home Assistant gives (it needs the token), or **Another path…** for
   any `dashboard/view`, for example `lovelace/0`. Under the list, **The phone opens** shows the exact address.
 - **Home Assistant address for the phone**: only when the phone reaches Home Assistant at another address than the
-  computer. A `.local` name such as `homeassistant.local`, which Android often cannot find, is already sent as the IP
-  address it has on the computer. `localhost` is not the server for the phone, though: enter the computer's address
+  computer. With a `.local` name such as `homeassistant.local`, the phone tries the name first and then the IP
+  addresses it has on the computer, and uses the first that answers. `localhost` is not the server for the phone, though: enter the computer's address
   on the network, for example `http://192.168.1.10:8123`.
 - **No card background** (on by default): the dashboard's own cards are the widget.
 

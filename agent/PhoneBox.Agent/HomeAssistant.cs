@@ -9,38 +9,43 @@ public sealed record HaListing(string Id, string Name, bool Switchable);
 public sealed record HaEntity(string Id, string State, string Name, string? Unit, string? DeviceClass, string? Icon, long Changed);
 
 /// <summary>
-/// The Home Assistant address as the phone should open it (Home Assistant dashboard widget). A ".local" name
-/// (homeassistant.local, which Home Assistant suggests) is found by mDNS, which Android's WebView often cannot do, so it
-/// is replaced by the IPv4 address it has on this computer. Other addresses go as they are.
+/// Other addresses the phone may try for Home Assistant (Home Assistant dashboard widget). A ".local" name
+/// (homeassistant.local, which Home Assistant suggests) is found by mDNS, which some Android versions cannot do in a
+/// WebView; the phone then tries the IPv4 addresses the name has on this computer. They come second, after the name
+/// itself: this computer may be on another network than the phone (a VPN, a second Wi-Fi), with an address the phone
+/// cannot reach.
 /// </summary>
 public static class HaAddress
 {
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string? Ip, DateTime At)> Resolved = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string[] Ips, DateTime At)> Resolved = new(StringComparer.OrdinalIgnoreCase);
 
-    public static string? ForPhone(string? url, Func<string, string?>? resolve = null)
+    public static string[] Alternatives(string? url, Func<string, string[]>? resolve = null)
     {
         if (!Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https")
-            || !u.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)) return url;
-        var ip = (resolve ?? Lookup)(u.Host);
-        if (ip is null) return url;
-        var phone = new UriBuilder(u) { Host = ip }.Uri.ToString();
-        return url!.Trim().EndsWith('/') ? phone : phone.TrimEnd('/');
+            || !u.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)) return [];
+        var slash = url!.Trim().EndsWith('/');
+        return (resolve ?? Lookup)(u.Host).Select(ip =>
+        {
+            var phone = new UriBuilder(u) { Host = ip }.Uri.ToString();
+            return slash ? phone : phone.TrimEnd('/');
+        }).Distinct().ToArray();
     }
 
     // remembered for 10 minutes (a failure for 1), so building the phone's config rarely waits for a lookup
-    private static string? Lookup(string host)
+    private static string[] Lookup(string host)
     {
-        if (Resolved.TryGetValue(host, out var r) && DateTime.UtcNow - r.At < TimeSpan.FromMinutes(r.Ip is null ? 1 : 10)) return r.Ip;
-        string? ip = null;
+        if (Resolved.TryGetValue(host, out var r) && DateTime.UtcNow - r.At < TimeSpan.FromMinutes(r.Ips.Length == 0 ? 1 : 10)) return r.Ips;
+        string[] ips = [];
         try
         {
             var task = System.Net.Dns.GetHostAddressesAsync(host);
             if (task.Wait(TimeSpan.FromSeconds(2)))
-                ip = task.Result.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !System.Net.IPAddress.IsLoopback(a))?.ToString();
+                ips = task.Result.Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !System.Net.IPAddress.IsLoopback(a))
+                    .Select(a => a.ToString()).ToArray();
         }
-        catch { /* not found: the name goes as it is */ }
-        Resolved[host] = (ip, DateTime.UtcNow);
-        return ip;
+        catch { /* not found: the phone has only the name */ }
+        Resolved[host] = (ips, DateTime.UtcNow);
+        return ips;
     }
 }
 
@@ -249,7 +254,7 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
             await Send(new() { ["type"] = "auth", ["access_token"] = ha.Token });
             var auth = await Receive();
             if (!auth.TryGetProperty("type", out var authType) || authType.GetString() != "auth_ok")
-                return new { configured = true, error = "The token was rejected", phoneUrl = HaAddress.ForPhone(ha.Url), views = Array.Empty<object>() };
+                return new { configured = true, error = "The token was rejected", phoneUrl = ha.Url, alternatives = HaAddress.Alternatives(ha.Url), views = Array.Empty<object>() };
 
             // the default dashboard (at /lovelace, read without a url_path) and the ones added in Settings › Dashboards.
             // Newer Home Assistant versions list the default one too, with the title it was given.
@@ -282,12 +287,12 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
                 if (listed == 0) views.Add(new { path = root, name });
             }
             try { await ws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, null, CancellationToken.None); } catch { /* closing is a courtesy */ }
-            return new { configured = true, error = (string?)null, phoneUrl = HaAddress.ForPhone(ha.Url), views };
+            return new { configured = true, error = (string?)null, phoneUrl = ha.Url, alternatives = HaAddress.Alternatives(ha.Url), views };
         }
         catch (Exception ex)
         {
             log.LogDebug(ex, "Home Assistant dashboards");
-            return new { configured = true, error = ex is OperationCanceledException ? "Home Assistant did not answer" : ex.Message, phoneUrl = HaAddress.ForPhone(ha.Url), views = Array.Empty<object>() };
+            return new { configured = true, error = ex is OperationCanceledException ? "Home Assistant did not answer" : ex.Message, phoneUrl = ha.Url, alternatives = HaAddress.Alternatives(ha.Url), views = Array.Empty<object>() };
         }
     }
 
