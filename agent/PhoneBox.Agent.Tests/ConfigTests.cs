@@ -463,6 +463,21 @@ public class ConfigTests
         else Assert.True(ha.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined);
     }
 
+    // Android's WebView often cannot find a .local name (mDNS): the phone gets the address it has on this computer.
+    [Theory]
+    [InlineData("http://homeassistant.local:8123", "http://192.168.1.10:8123")]
+    [InlineData("http://homeassistant.local:8123/", "http://192.168.1.10:8123/")]
+    [InlineData("https://HA.local", "https://192.168.1.10")]
+    [InlineData("http://192.168.1.20:8123", "http://192.168.1.20:8123")]   // an address goes as it is
+    [InlineData("https://ha.example.com", "https://ha.example.com")]      // so does a name in DNS
+    [InlineData("homeassistant.local:8123", "homeassistant.local:8123")]  // not a URL: left for the phone to report
+    public void APhoneGetsTheIpAddressOfALocalName(string url, string expected) =>
+        Assert.Equal(expected, HaAddress.ForPhone(url, host => host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ? "192.168.1.10" : null));
+
+    [Fact]
+    public void ALocalNameThatCannotBeFoundGoesAsItIs() =>
+        Assert.Equal("http://nowhere.local:8123", HaAddress.ForPhone("http://nowhere.local:8123", _ => null));
+
     [Fact]
     public void ThePhoneLearnsWhichShortcutPicturesAreUploads()
     {

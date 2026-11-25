@@ -2193,17 +2193,44 @@ function optionField(w, o, onValChange) {
     }
     case 'ha-items': return haItemsEditor(w, o, set);
     case 'ha-dashboard': {
-      // free text (any "dashboard/view" path) with the dashboards Home Assistant lists as suggestions
-      const list = h('datalist', { id: 'ha-dashboards-' + Math.random().toString(36).slice(2) });
-      const input = h('input', { type: 'text', value: v ?? '', placeholder: 'lovelace/0', spellcheck: 'false', style: { flex: '1', minWidth: '0' }, oninput: (e) => set(o.key, e.target.value.trim()) });
-      input.setAttribute('list', list.id);
-      const status = h('span', { class: 'hint' });
+      // The dashboards and views Home Assistant lists, to pick from; "Another path…" takes any "dashboard/view". Under
+      // it: what the phone will open (the widget's own address, or the one the agent sends), and how to set it all up.
+      const OTHER = '\u0001other';
+      let value = String(v ?? '').trim(), views = [], answer = null;
+      const custom = h('input', { type: 'text', value, placeholder: 'dashboard/view', spellcheck: 'false', oninput: (e) => { value = e.target.value.trim(); set(o.key, value); opensLine(); } });
+      custom.hidden = true;
+      const select = h('select', { style: { flex: '1', minWidth: '0' }, onchange: (e) => {
+        if (e.target.value === OTHER) { custom.hidden = false; custom.focus(); return; }
+        custom.hidden = true; value = e.target.value; custom.value = value; set(o.key, value); opensLine();
+      } });
+      const status = h('div', { class: 'hint' });
+      const opens = h('div', { class: 'hint' });
+      const opensLine = () => {
+        const base = (String(w.options?.address || '').trim() || answer?.phoneUrl || '').replace(/\/+$/, '');
+        opens.replaceChildren(...(base ? [t('s.hadash.opens') + ': ', h('code', {}, base + '/' + (value.replace(/^\/+|\/+$/g, '') || 'lovelace'))] : []));
+      };
+      const fill = () => {
+        const known = views.some((x) => x.path === value);
+        const pick = h('option', { value: '' }, t('s.hadash.pick'));
+        pick.disabled = true;
+        const other = h('option', { value: OTHER }, value && !known ? `${t('s.hadash.other')} ${value}` : t('s.hadash.other'));
+        select.replaceChildren(pick, ...views.map((x) => h('option', { value: x.path }, `${x.name} (${x.path})`)), other);
+        select.value = !value ? '' : known ? value : OTHER;
+        custom.hidden = !value || known;
+        opensLine();
+      };
       const load = () => fetch('/api/ha/dashboards').then((r) => r.json()).then((d) => {
-        status.textContent = d.error || '';
-        list.replaceChildren(...(d.views || []).map((x) => h('option', { value: x.path }, x.name)));
+        answer = d; views = d.views || [];
+        status.textContent = d.configured === false ? t('s.hadash.noServer') : d.error || '';
+        fill();
       }).catch(() => {});
+      fill();
       load();
-      return field(h('div', { class: 'row', style: { gap: '8px' } }, input, h('button', { class: 'btn sm', onclick: load }, t('s.js.refresh'))), list, status);
+      // the widget's own address is another field of the same inspector: follow it as it is typed
+      queueMicrotask(() => select.closest('.field')?.parentElement?.addEventListener('input', opensLine));
+      const guide = h('a', { href: 'https://github.com/ersinkoc/phonebox/blob/main/docs/HOME-ASSISTANT.md', target: '_blank', rel: 'noopener' }, t('s.hadash.guide'));
+      return field(h('div', { class: 'row', style: { gap: '8px' } }, select, h('button', { class: 'btn sm', onclick: load }, t('s.js.refresh'))), custom, status, opens,
+        h('div', { class: 'hint' }, t('s.hadash.help'), ' ', guide));
     }
     case 'steam-games': return steamGamesEditor(w, o, set);
     case 'plex-playlists': return plexPlaylistsEditor(w, o, set);

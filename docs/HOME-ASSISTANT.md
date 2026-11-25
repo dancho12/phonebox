@@ -18,11 +18,12 @@ panel draws them its own way.)
 
 ## The widget's settings
 
-- **Dashboard and view**: `dashboard/view`, for example `lovelace/0` or `phonebox-panel/home`. Empty is the default
-  dashboard.
-- **Address from the phone**: when the phone reaches Home Assistant at another address than the computer. Android
-  often cannot resolve `homeassistant.local`, and `localhost` on the computer is not the server for the phone; enter
-  the IP address, for example `http://192.168.1.10:8123`.
+- **Dashboard and view**: pick one from the list Home Assistant gives (it needs the token), or **Another path…** for
+  any `dashboard/view`, for example `lovelace/0`. Under the list, **The phone opens** shows the exact address.
+- **Home Assistant address for the phone**: only when the phone reaches Home Assistant at another address than the
+  computer. A `.local` name such as `homeassistant.local`, which Android often cannot find, is already sent as the IP
+  address it has on the computer. `localhost` is not the server for the phone, though: enter the computer's address
+  on the network, for example `http://192.168.1.10:8123`.
 - **No card background** (on by default): the dashboard's own cards are the widget.
 
 Until the server answers, the widget says so and tries again every 15 seconds. When the server answers again after

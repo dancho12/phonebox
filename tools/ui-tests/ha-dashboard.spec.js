@@ -56,12 +56,32 @@ test('the settings offer the dashboards Home Assistant lists', async ({ page }) 
   await page.setViewportSize({ width: 1280, height: 860 });
   await open(page, '/settings/#pages', { dashboard: '' });
   await page.locator('#canvas .wb').first().click(); // selects the widget and opens its settings
-  const input = page.locator('input[placeholder="lovelace/0"]');
-  await expect(input).toBeVisible();
-  const list = page.locator(`datalist#${await input.getAttribute('list')} option`);
-  await expect(list).toHaveCount(3);
-  await expect(list.nth(1)).toHaveAttribute('value', 'desk-panel/home');
-  await input.fill('desk-panel/climate');
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('pb-demo-config') || 'null'))).toBeTruthy();
+  // a real list: "Choose a dashboard…", the three views, "Another path…"
+  const select = page.locator('.field select').filter({ has: page.locator('option', { hasText: 'Another path…' }) });
+  await expect(select.locator('option')).toHaveCount(5);
+  await expect(select.locator('option').nth(2)).toHaveText('Desk panel › Home (desk-panel/home)');
+  await select.selectOption('desk-panel/home');
+  const opens = page.getByText('The phone opens:');
+  await expect(opens).toContainText('http://192.168.1.10:8123/desk-panel/home');
+  // the widget's own address wins, as on the phone, and the line follows it as it is typed
+  await page.locator('.field', { hasText: 'Home Assistant address for the phone' }).locator('input').fill('http://10.0.0.5:8123/');
+  await expect(opens).toContainText('http://10.0.0.5:8123/desk-panel/home');
+  // any other path
+  await select.selectOption({ label: 'Another path…' });
+  const other = page.locator('input[placeholder="dashboard/view"]');
+  await expect(other).toBeVisible();
+  await other.fill('energy/0');
+  await expect(opens).toContainText('http://10.0.0.5:8123/energy/0');
+  // the setup in a few words, with the guide
+  await expect(page.getByRole('link', { name: 'Setup guide' })).toHaveAttribute('href', /docs\/HOME-ASSISTANT\.md$/);
   expect(errors).toEqual([]);
+});
+
+test('a saved path Home Assistant does not list shows as another path', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await open(page, '/settings/#pages', { dashboard: 'old-panel/0' });
+  await page.locator('#canvas .wb').first().click();
+  await expect(page.locator('input[placeholder="dashboard/view"]')).toHaveValue('old-panel/0');
+  const select = page.locator('.field select').filter({ has: page.locator('option', { hasText: 'Another path…' }) });
+  await expect(select.locator('option:checked')).toHaveText('Another path… old-panel/0');
 });
