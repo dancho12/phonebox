@@ -476,6 +476,9 @@ class MainActivity : Activity(), SensorEventListener {
                 val r = assetLoader.shouldInterceptRequest(url)
                 // the panel is made of ES modules, which need a JavaScript MIME type
                 if (r != null && url.path?.endsWith(".js") == true) r.mimeType = "text/javascript"
+                // The panel's own host never goes to the network: over plain http someone on the network could answer
+                // it, and such a page would run in the panel's origin (with the bridge key).
+                if (r == null && url.host == ASSET_HOST) return FORBIDDEN()
                 return r
             }
 
@@ -810,9 +813,11 @@ class MainActivity : Activity(), SensorEventListener {
             val write = "(() => { try { const old = JSON.parse($movedStorage) || {};" +
                 " for (const [k, v] of Object.entries(old)) if (localStorage.getItem(k) === null) localStorage.setItem(k, v);" +
                 " return true; } catch (_) { return false; } })()"
-            view.evaluateJavascript(write) {
+            view.evaluateJavascript(write) { written ->
                 if (destroyed) return@evaluateJavascript
-                panelPreferences.edit().putBoolean(STORAGE_MOVED, true).apply()
+                // done only when the old entries were read and all written; otherwise the next start tries again (it
+                // never overwrites what the new origin already has)
+                if (movedStorage != "null" && written == "true") panelPreferences.edit().putBoolean(STORAGE_MOVED, true).apply()
                 loadPanel()
             }
         }
