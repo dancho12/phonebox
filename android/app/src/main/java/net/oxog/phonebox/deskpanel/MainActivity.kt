@@ -454,10 +454,10 @@ class MainActivity : Activity(), SensorEventListener {
             mediaPlaybackRequiresUserGesture = false
             cacheMode = WebSettings.LOAD_NO_CACHE
             textZoom = 100
-            // a web page shown by address may be plain http, and may need its own cookies (a sign-in)
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            // the panel is http, so a plain http page in a frame is not mixed content; this only matters for an
+            // https page that loads http parts
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
-        android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         web.isVerticalScrollBarEnabled = false
         web.isHorizontalScrollBarEnabled = false
         web.isHapticFeedbackEnabled = false
