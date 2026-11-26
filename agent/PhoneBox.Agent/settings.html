@@ -2241,12 +2241,13 @@ function optionField(w, o, onValChange) {
       // the widget's own address is another field of the same inspector: follow it as it is typed
       queueMicrotask(() => select.closest('.field')?.parentElement?.addEventListener('input', opensLine));
       // what Home Assistant needs: two add-ons (from its Marketplace or HACS) and one setting
-      const FRAME_SETTING = ['http:', 'use_x_frame_options:', 'false'].join(' '); // configuration.yaml, not text to translate
+      // configuration.yaml, not text to translate: two lines, as it is pasted
+      const FRAME_SETTING = ['http:', '  use_x_frame_options: false'].join('\n');
       const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener' }, text);
       const needs = h('ul', { style: { margin: '4px 0', paddingLeft: '18px' } },
         h('li', {}, link('https://github.com/dancho12/ha-phonebox-embed', 'PhoneBox embed'), ' — ', t('s.hadash.embedWhat')),
         h('li', {}, link('https://github.com/NemesisRE/kiosk-mode', 'kiosk-mode'), ' — ', t('s.hadash.kioskWhat')),
-        h('li', {}, h('code', {}, FRAME_SETTING), ' — ', t('s.hadash.frameWhat')));
+        h('li', {}, h('pre', { style: { margin: '2px 0', userSelect: 'all' } }, FRAME_SETTING), t('s.hadash.frameWhat')));
       return field(h('div', { class: 'row', style: { gap: '8px' } }, select, h('button', { class: 'btn sm', onclick: load }, t('s.js.refresh'))), custom, status, opens,
         h('div', { class: 'hint' }, t('s.hadash.help'), needs, link('https://github.com/ersinkoc/phonebox/blob/main/docs/HOME-ASSISTANT.md', t('s.hadash.guide'))));
     }

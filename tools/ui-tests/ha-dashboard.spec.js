@@ -75,7 +75,8 @@ test('the settings offer the dashboards Home Assistant lists', async ({ page }) 
   // what Home Assistant needs, with links to the two add-ons and the guide
   await expect(page.getByRole('link', { name: 'PhoneBox embed' })).toHaveAttribute('href', 'https://github.com/dancho12/ha-phonebox-embed');
   await expect(page.getByRole('link', { name: 'kiosk-mode' })).toHaveAttribute('href', 'https://github.com/NemesisRE/kiosk-mode');
-  await expect(page.getByText('http: use_x_frame_options: false')).toBeVisible();
+  // valid YAML, on two lines as it is pasted into configuration.yaml
+  await expect(page.locator('.hint pre')).toHaveText('http:\n  use_x_frame_options: false');
   await expect(page.getByRole('link', { name: 'Setup guide' })).toHaveAttribute('href', /docs\/HOME-ASSISTANT\.md$/);
   expect(errors).toEqual([]);
 });

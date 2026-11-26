@@ -131,7 +131,7 @@ public sealed class AgentConfig
         // Home Assistant dashboard widget: the server's address, which the phone opens itself; the token stays here.
         // Sent only while a page this phone shows has such a widget; with a .local name, its IP addresses to try too (HaAddress).
         homeAssistant = PagesFor(deviceId).SelectMany(p => p.Widgets ?? []).SelectMany(w => new[] { w }.Concat(StackWidgets.Children(w)
-            .Select(c => new WidgetConfig { Type = c.Type }))).Any(w => w.Type == "hadash") ? new { url = HomeAssistant.Url, alternatives = HaAddress.Alternatives(HomeAssistant.Url) } : null,
+            .Select(c => new WidgetConfig { Type = c.Type }))).Any(w => w.Type == "hadash") ? new { url = HaAddress.ForPhone(HomeAssistant.Url), alternatives = HaAddress.Alternatives(HaAddress.ForPhone(HomeAssistant.Url)) } : null,
     };
 
 

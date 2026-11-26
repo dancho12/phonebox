@@ -19,6 +19,16 @@ public static class HaAddress
 {
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string[] Ips, DateTime At)> Resolved = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The address as the phone gets it: http or https only, and never a user name or password written into it.</summary>
+    public static string? ForPhone(string? url)
+    {
+        var text = url?.Trim();
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https")) return null;
+        if (u.UserInfo.Length == 0) return text;
+        var clean = new UriBuilder(u) { UserName = "", Password = "" }.Uri.ToString();
+        return text!.EndsWith('/') ? clean : clean.TrimEnd('/');
+    }
+
     public static string[] Alternatives(string? url, Func<string, string[]>? resolve = null)
     {
         if (!Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https")
@@ -237,7 +247,8 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
             }
             Task Send(Dictionary<string, object?> message) =>
                 ws.SendAsync(JsonSerializer.SerializeToUtf8Bytes(message), System.Net.WebSockets.WebSocketMessageType.Text, true, ct);
-            async Task<JsonElement?> Call(Dictionary<string, object?> command)
+            // the result, or the error's code and message when Home Assistant refused the command
+            async Task<(JsonElement? Result, string? Code, string? Error)> Call(Dictionary<string, object?> command)
             {
                 var id = ++nextId;
                 command["id"] = id;
@@ -246,9 +257,14 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
                 {
                     var m = await Receive();
                     if (!m.TryGetProperty("id", out var mid) || mid.ValueKind != JsonValueKind.Number || mid.GetInt32() != id) continue;
-                    return m.TryGetProperty("success", out var ok) && ok.ValueKind == JsonValueKind.True && m.TryGetProperty("result", out var result) ? result : null;
+                    if (m.TryGetProperty("success", out var ok) && ok.ValueKind == JsonValueKind.True)
+                        return (m.TryGetProperty("result", out var result) ? result : null, null, null);
+                    var e = m.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.Object ? err : default;
+                    string? Field(string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var f) && f.ValueKind == JsonValueKind.String ? f.GetString() : null;
+                    return (null, Field("code") ?? "unknown_error", Field("message") ?? "no reason given");
                 }
             }
+            string? problem = null; // a refused command: the list is shown, with this next to it
 
             await Receive(); // auth_required
             await Send(new() { ["type"] = "auth", ["access_token"] = ha.Token });
@@ -259,7 +275,9 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
             // the default dashboard (at /lovelace, read without a url_path) and the ones added in Settings › Dashboards.
             // Newer Home Assistant versions list the default one too, with the title it was given.
             var dashboards = new List<(string? Path, string Name)> { (null, "Overview") };
-            if (await Call(new() { ["type"] = "lovelace/dashboards/list" }) is { ValueKind: JsonValueKind.Array } list)
+            var dashboardList = await Call(new() { ["type"] = "lovelace/dashboards/list" });
+            if (dashboardList.Error is { } listError) problem = "Home Assistant did not list its dashboards: " + listError;
+            if (dashboardList.Result is { ValueKind: JsonValueKind.Array } list)
                 foreach (var d in list.EnumerateArray())
                     if (d.TryGetProperty("url_path", out var p) && p.GetString() is { Length: > 0 } path)
                     {
@@ -275,7 +293,10 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
                 var command = new Dictionary<string, object?> { ["type"] = "lovelace/config" };
                 if (path is not null) command["url_path"] = path;
                 var listed = 0;
-                if (await Call(command) is { ValueKind: JsonValueKind.Object } conf && conf.TryGetProperty("views", out var vs) && vs.ValueKind == JsonValueKind.Array)
+                var read = await Call(command);
+                // config_not_found: a dashboard made by a strategy, which has no configuration of its own (see below)
+                if (read.Error is { } readError && read.Code != "config_not_found") problem ??= $"Home Assistant did not give the views of {name}: {readError}";
+                if (read.Result is { ValueKind: JsonValueKind.Object } conf && conf.TryGetProperty("views", out var vs) && vs.ValueKind == JsonValueKind.Array)
                     foreach (var v in vs.EnumerateArray())
                     {
                         var key = v.TryGetProperty("path", out var vp) && vp.GetString() is { Length: > 0 } viewPath ? viewPath : listed.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -293,7 +314,7 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
                 await ws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, null, closing.Token);
             }
             catch { /* the server did not answer the close in time */ }
-            return new { configured = true, error = (string?)null, phoneUrl = ha.Url, alternatives = HaAddress.Alternatives(ha.Url), views };
+            return new { configured = true, error = problem, phoneUrl = ha.Url, alternatives = HaAddress.Alternatives(ha.Url), views };
         }
         catch (Exception ex)
         {

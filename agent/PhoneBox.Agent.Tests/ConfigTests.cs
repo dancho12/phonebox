@@ -492,6 +492,23 @@ public class ConfigTests
         Assert.DoesNotContain("secret-ha-token", pub);
     }
 
+    // A user name or password written into the address stays on the computer too.
+    [Theory]
+    [InlineData("http://alice:secret-pass@ha.example.com:8123", "http://ha.example.com:8123")]
+    [InlineData("https://alice@ha.example.com/", "https://ha.example.com")]
+    [InlineData("http://192.168.1.10:8123", "http://192.168.1.10:8123")]
+    [InlineData("ftp://ha.example.com", null)]
+    public void TheDashboardWidgetGetsTheAddressWithoutUserInfo(string url, string? expected)
+    {
+        var c = Load($$"""
+        { "homeAssistant": { "url": "{{url}}" },
+          "pages": [ { "id": "p", "title": "P", "widgets": [ { "id": "d", "type": "hadash", "x": 0, "y": 0, "w": 12, "h": 6 } ] } ] }
+        """);
+        var ha = JsonSerializer.SerializeToElement(c.ToPublic()).GetProperty("homeAssistant");
+        Assert.Equal(expected, ha.GetProperty("url").GetString());
+        Assert.DoesNotContain("alice", ha.ToString());
+    }
+
     [Fact]
     public void ThePhoneLearnsWhichShortcutPicturesAreUploads()
     {
