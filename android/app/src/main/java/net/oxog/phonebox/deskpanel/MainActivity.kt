@@ -784,14 +784,18 @@ class MainActivity : Activity(), SensorEventListener {
             @Suppress("DEPRECATION")
             languages.put(configuration.locale.toLanguageTag())
         }
-        return "window.__phoneboxKey='$bridgeKey';window.__phoneboxLanguages=$languages;"
+        // only the panel itself, never a frame: a widget's frame keeps the panel's origin with allow-same-origin if its
+        // page navigates to the panel's own address, and the origin rule alone would give that frame the key too
+        return "if(window.top===window){window.__phoneboxKey='$bridgeKey';window.__phoneboxLanguages=$languages;}"
     }
 
     private fun loadPanel() = web.loadUrl("$PANEL_ORIGIN/assets/www/index.html")
 
     // The panel used to be served from https://$ASSET_HOST. Its localStorage (the settings kept for an offline start,
     // counters, timers, checklists) belongs to that origin, so it is copied over once, before the panel first starts on
-    // http: read on an empty page of the old origin, written on one of the new, keeping anything already there.
+    // http: read on an empty page of the old origin, written on one of the new, keeping anything already there. After a
+    // failed attempt the old entries win: what the new origin has then was written after that failure (a counter that
+    // started over), and the old value must not be lost.
     private var storageMove = 0 // 1: reading the old origin, 2: writing to the new one, 0: done
     private var movedStorage = "null"
 
@@ -810,14 +814,16 @@ class MainActivity : Activity(), SensorEventListener {
             }
         } else if (storageMove == 2 && url?.startsWith("$PANEL_ORIGIN/") == true) {
             storageMove = 0
+            val overwrite = panelPreferences.getBoolean(STORAGE_MOVE_FAILED, false)
             val write = "(() => { try { const old = JSON.parse($movedStorage) || {};" +
-                " for (const [k, v] of Object.entries(old)) if (localStorage.getItem(k) === null) localStorage.setItem(k, v);" +
+                " for (const [k, v] of Object.entries(old)) if ($overwrite || localStorage.getItem(k) === null) localStorage.setItem(k, v);" +
                 " return true; } catch (_) { return false; } })()"
             view.evaluateJavascript(write) { written ->
                 if (destroyed) return@evaluateJavascript
-                // done only when the old entries were read and all written; otherwise the next start tries again (it
-                // never overwrites what the new origin already has)
+                // done only when the old entries were read and all written; otherwise the next start tries again, and
+                // then the old entries overwrite what the new origin got meanwhile
                 if (movedStorage != "null" && written == "true") panelPreferences.edit().putBoolean(STORAGE_MOVED, true).apply()
+                else panelPreferences.edit().putBoolean(STORAGE_MOVE_FAILED, true).apply()
                 loadPanel()
             }
         }
@@ -1088,6 +1094,7 @@ class MainActivity : Activity(), SensorEventListener {
         private const val ASSET_HOST = "appassets.androidplatform.net"
         private const val PANEL_ORIGIN = "http://$ASSET_HOST"
         private const val STORAGE_MOVED = "storage-moved-to-http"
+        private const val STORAGE_MOVE_FAILED = "storage-move-to-http-failed"
         private val NO_STORE = mapOf("Cache-Control" to "no-store")
         private const val PANEL_HEADER = "X-PhoneBox-Panel"
         private val READ_ONLY_IMAGES = setOf("/agent/api/art", "/agent/api/procs/icon", "/agent/api/controls/radio-logo", "/agent/api/apps/icon", "/agent/api/discord/img", "/agent/api/shortcuts/icon",
