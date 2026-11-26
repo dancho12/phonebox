@@ -708,6 +708,14 @@ app.MapGet("/api/network/adapters", (ConfigStore cfg) => Results.Json(SystemMoni
 app.MapGet("/api/ha/entities", async (HomeAssistant ha) => Results.Json(await ha.ListEntitiesAsync()));
 // Settings › widget › Home Assistant dashboard: the dashboards and views to pick from (local only, like the entities)
 app.MapGet("/api/ha/dashboards", async (HomeAssistant ha) => Results.Json(await ha.ListDashboardsAsync()));
+// Home Assistant dashboard widget: the token the phone signs the dashboard in with, only for such a widget of this phone
+// that asks for it (on the Wi-Fi list: the phone asks for it)
+app.MapGet("/api/ha/frame-sign-in", (string? widget, HttpRequest req, HttpResponse res, ConfigStore cfg) =>
+{
+    res.Headers.CacheControl = "no-store";
+    var (status, body) = HomeAssistant.FrameSignIn(cfg.Get(), req.Headers["X-PhoneBox-Device"].ToString(), widget);
+    return Results.Json(body, statusCode: status);
+});
 // Settings › General › Home Assistant › Test (local only)
 app.MapPost("/api/ha/test", async (HomeAssistantConfig body) =>
     Results.Json(new { result = await HomeAssistant.TestAsync(body.Url ?? "", body.Token ?? "") }));

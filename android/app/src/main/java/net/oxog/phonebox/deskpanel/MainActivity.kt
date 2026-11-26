@@ -1109,7 +1109,62 @@ class MainActivity : Activity(), SensorEventListener {
 
         @JavascriptInterface
         fun cancelListening(key: String, id: Int) { if (ok(key) && id > 0) dictation.cancel(id) }
+
+        /**
+         * Home Assistant dashboard widget: signs its dashboard in with [token] (a Home Assistant access token from the
+         * agent) the way the Home Assistant app does. Home Assistant's frontend asks window.externalApp for a token
+         * when that object exists ("external auth"); a document-start script defines it only in frames of [origins]
+         * (a JSON array of the server's origins, added to those of earlier calls) and only inside the panel,
+         * never as the top page. True once the script is in place (the widget then loads its frame); false when this
+         * WebView cannot do it, and the widget shows Home Assistant's own sign-in instead.
+         */
+        @JavascriptInterface
+        fun haSignIn(key: String, origins: String, token: String): Boolean {
+            if (!ok(key) || !documentStartKey || token.isBlank() || token.length > 4096) return false
+            val rules = try {
+                JSONArray(origins).let { list -> (0 until list.length()).map { list.getString(it) } }.filter { HA_ORIGIN.matches(it) }.toSet()
+            } catch (_: Exception) { return false }
+            if (rules.isEmpty()) return false
+            val done = java.util.concurrent.CountDownLatch(1)
+            var added = false
+            runOnUiThread {
+                try {
+                    if (!destroyed) {
+                        // every widget's servers (all use the token from Settings, so one script serves them all)
+                        haSignInOrigins += rules
+                        haSignInScript?.remove()
+                        haSignInScript = WebViewCompat.addDocumentStartJavaScript(web, haSignInBootstrap(token), haSignInOrigins.toSet())
+                        added = true
+                    }
+                } catch (_: Exception) {
+                } finally { done.countDown() }
+            }
+            return done.await(3, java.util.concurrent.TimeUnit.SECONDS) && added
+        }
     }
+
+    private var haSignInScript: androidx.webkit.ScriptHandler? = null
+    private val haSignInOrigins = mutableSetOf<String>()
+
+    // Home Assistant's external auth (frontend src/external_app/external_auth.ts): it calls
+    // externalApp.getExternalAuth('{"callback":"externalAuthSetToken"}') and waits for window[callback](true, tokens).
+    // There is no externalBus, so the frontend does not expect the app's other messages.
+    private fun haSignInBootstrap(token: String) = """
+        (() => {
+          if (window.top === window) return;
+          const token = ${JSONObject.quote(token)};
+          const reply = (payload, ok, data) => {
+            let name = '';
+            try { name = String(JSON.parse(payload).callback || ''); } catch (_) { return; }
+            if (!/^externalAuth\w+$/.test(name)) return;
+            setTimeout(() => { if (typeof window[name] === 'function') window[name](ok, data); });
+          };
+          window.externalApp = {
+            getExternalAuth: (payload) => reply(payload, true, { access_token: token, expires_in: 1800 }),
+            revokeExternalAuth: (payload) => reply(payload, true),
+          };
+        })();
+    """.trimIndent()
 
     companion object {
         private const val ASSET_HOST = "appassets.androidplatform.net"
@@ -1117,6 +1172,8 @@ class MainActivity : Activity(), SensorEventListener {
         private const val STORAGE_MOVED = "storage-moved-to-http"
         private const val STORAGE_MOVE_FAILED = "storage-move-to-http-failed"
         private const val MOVED_KEYS = "phonebox-storage-move-done"
+        // a Home Assistant server origin the dashboard widget may sign in: scheme, host (or [IPv6]) and port, no path
+        private val HA_ORIGIN = Regex("""^https?://(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+)(:[0-9]{1,5})?$""")
         private val NO_STORE = mapOf("Cache-Control" to "no-store")
         private const val PANEL_HEADER = "X-PhoneBox-Panel"
         private val READ_ONLY_IMAGES = setOf("/agent/api/art", "/agent/api/controls/radio-logo", "/agent/api/apps/icon", "/agent/api/discord/img", "/agent/api/shortcuts/icon",

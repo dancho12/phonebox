@@ -24,7 +24,7 @@ test('the dashboard opens from the address in Settings, in a frame of its own or
   const server = new URL(baseURL).origin;
   await open(page, '/panel/', { dashboard: '/desk-panel/home/' }, { url: server + '/', token: 'secret-token' });
   const frame = page.locator('.w-hadash iframe');
-  await expect(frame).toHaveAttribute('src', server + '/desk-panel/home');
+  await expect(frame).toHaveAttribute('src', server + '/desk-panel/home?kiosk');
   await expect(frame).toHaveAttribute('sandbox', /allow-same-origin/);
   await expect(page.locator('.w-hadash')).toHaveClass(/bare-html/); // no card background by default
   // no card around it, and not clipped to rounded corners (WebView would drop the page's own rounded clips)
@@ -39,7 +39,7 @@ test('the dashboard opens from the address in Settings, in a frame of its own or
 
 test('the widget\'s own address wins, and a path it cannot use falls back to the default dashboard', async ({ page, baseURL }) => {
   const server = new URL(baseURL).origin;
-  await open(page, '/panel/', { address: server, dashboard: 'bad path"><x', transparent: false }, { url: 'http://homeassistant.local:8123', token: 't' });
+  await open(page, '/panel/', { address: server, dashboard: 'bad path"><x', transparent: false, kiosk: false }, { url: 'http://homeassistant.local:8123', token: 't' });
   await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/lovelace');
   await expect(page.locator('.w-hadash')).not.toHaveClass(/bare-html/);
 });
@@ -62,17 +62,20 @@ test('the settings offer the dashboards Home Assistant lists', async ({ page }) 
   await expect(select.locator('option').nth(2)).toHaveText('Desk panel › Home (desk-panel/home)');
   await select.selectOption('desk-panel/home');
   const opens = page.getByText('The phone opens:');
-  await expect(opens).toContainText('http://192.168.1.10:8123/desk-panel/home');
+  await expect(opens).toContainText('http://192.168.1.10:8123/desk-panel/home?kiosk');
   // the widget's own address wins, as on the phone, and the line follows it as it is typed
   await page.locator('.field', { hasText: 'Home Assistant address for the phone' }).locator('input').fill('http://10.0.0.5:8123/');
-  await expect(opens).toContainText('http://10.0.0.5:8123/desk-panel/home');
+  await expect(opens).toContainText('http://10.0.0.5:8123/desk-panel/home?kiosk');
   // any other path
   await select.selectOption({ label: 'Another path…' });
   const other = page.locator('input[placeholder="dashboard/view"]');
   await expect(other).toBeVisible();
   await other.fill('energy/0');
-  await expect(opens).toContainText('http://10.0.0.5:8123/energy/0');
-  // the setup in a few words, with the guide
+  await expect(opens).toContainText('http://10.0.0.5:8123/energy/0?kiosk');
+  // what Home Assistant needs, with links to the two add-ons and the guide
+  await expect(page.getByRole('link', { name: 'PhoneBox embed' })).toHaveAttribute('href', 'https://github.com/dancho12/ha-phonebox-embed');
+  await expect(page.getByRole('link', { name: 'kiosk-mode' })).toHaveAttribute('href', 'https://github.com/NemesisRE/kiosk-mode');
+  await expect(page.getByText('http: use_x_frame_options: false')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Setup guide' })).toHaveAttribute('href', /docs\/HOME-ASSISTANT\.md$/);
   expect(errors).toEqual([]);
 });
@@ -90,5 +93,38 @@ test('without an address of its own the widget uses the first address that answe
   // the name from Settings does not answer on this network; the address the computer found for it does
   const server = new URL(baseURL).origin;
   await open(page, '/panel/', { dashboard: 'desk-panel/home' }, { url: 'http://127.0.0.1:9', token: 't', alternatives: [server] });
-  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home');
+  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home?kiosk');
+});
+
+// The app's bridge as the phone has it, with only the sign-in: records what the panel hands over.
+const fakeBridge = () => {
+  window.Android = { haSignIn: (key, origins, token) => { window.__haSignIn = { origins: JSON.parse(origins), token }; return true; } };
+};
+
+test('with the token from Settings the app signs the dashboard in before it loads', async ({ page, baseURL }) => {
+  const errors = []; page.on('pageerror', (e) => errors.push(String(e)));
+  await page.addInitScript(fakeBridge);
+  const server = new URL(baseURL).origin;
+  await open(page, '/panel/', { dashboard: 'desk-panel/home' }, { url: server, token: 'secret-token', alternatives: ['http://192.168.1.10:8123'] });
+  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home?kiosk');
+  // the token goes to the app, for the server's origins only; it is never in the frame's address
+  expect(await page.evaluate(() => window.__haSignIn)).toEqual({ origins: [server, 'http://192.168.1.10:8123'], token: 'secret-token' });
+  await expect(page.locator('.w-hadash iframe')).not.toHaveAttribute('src', /secret/);
+  expect(errors).toEqual([]);
+});
+
+test('with Home Assistant\'s own sign-in the token is not asked for', async ({ page, baseURL }) => {
+  await page.addInitScript(fakeBridge);
+  const server = new URL(baseURL).origin;
+  await open(page, '/panel/', { dashboard: 'desk-panel/home', signIn: 'ha' }, { url: server, token: 'secret-token' });
+  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home?kiosk');
+  expect(await page.evaluate(() => window.__haSignIn ?? null)).toBeNull();
+});
+
+test('without a token in Settings the widget says what to do', async ({ page, baseURL }) => {
+  await page.addInitScript(fakeBridge);
+  const server = new URL(baseURL).origin;
+  await open(page, '/panel/', { dashboard: 'desk-panel/home' }, { url: server, token: null });
+  await expect(page.locator('.w-hadash .empty')).toHaveText("Add the Home Assistant token in Settings › General, or choose Home Assistant's own sign-in in this widget");
+  await expect(page.locator('.w-hadash iframe')).toHaveCount(0);
 });

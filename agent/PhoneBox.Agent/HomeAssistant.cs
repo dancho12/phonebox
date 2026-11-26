@@ -51,8 +51,8 @@ public static class HaAddress
 
 /// <summary>
 /// Home Assistant over its REST API with a long-lived access token (Settings › General). The phone only sees the
-/// entities listed in its Home Assistant widgets, and may only switch those whose widget allows it. The token never
-/// leaves this computer.
+/// entities listed in its Home Assistant widgets, and may only switch those whose widget allows it. The token leaves
+/// this computer only for a Home Assistant dashboard widget that signs in with it (see FrameSignIn).
 /// </summary>
 public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log)
 {
@@ -200,6 +200,21 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
             return new { configured = true, error = (string?)null, entities = list.OrderBy(x => x.Id, StringComparer.Ordinal).ToList() };
         }
         catch (Exception ex) { return new { configured = true, error = ex is TaskCanceledException ? "Home Assistant did not answer" : ex.Message, entities = Array.Empty<object>() }; }
+    }
+
+    /// <summary>
+    /// Sign-in for a Home Assistant dashboard widget (its "signIn" option, "token" by default): the token from Settings ›
+    /// General, so the phone can hand it to Home Assistant's frontend the way the Home Assistant app does (external
+    /// auth), with no password and no trusted network. Only for a widget of that type on an enabled page this phone
+    /// shows, and only when the widget asks for it; with "ha" the phone uses Home Assistant's own sign-in instead.
+    /// </summary>
+    public static (int Status, object Body) FrameSignIn(AgentConfig c, string? deviceId, string? widget)
+    {
+        if (PanelWidgets.Find(c, deviceId, widget, "hadash") is not { } w)
+            return (404, new { error = "this Home Assistant dashboard widget isn't on an enabled page of this phone" });
+        if ((w.Str("signIn") ?? "token") != "token") return (403, new { error = "this widget uses Home Assistant's own sign-in" });
+        if (string.IsNullOrWhiteSpace(c.HomeAssistant.Token)) return (409, new { error = "no Home Assistant token in Settings › General" });
+        return (200, new { token = c.HomeAssistant.Token.Trim() });
     }
 
     /// <summary>

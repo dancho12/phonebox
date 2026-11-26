@@ -479,6 +479,27 @@ public class ConfigTests
     public void ALocalNameThatCannotBeFoundHasNoAlternatives() =>
         Assert.Empty(HaAddress.Alternatives("http://nowhere.local:8123", _ => []));
 
+    // The dashboard widget signs in with the token from Settings: the phone gets it only for such a widget of its own
+    // pages (also a Smart Stack card) that asks for it, and is told when Settings has no token.
+    [Theory]
+    [InlineData("""{ "id": "d", "type": "hadash", "x": 0, "y": 0, "w": 12, "h": 6 }""", "p/d", "secret-ha-token", 200)]
+    [InlineData("""{ "id": "d", "type": "hadash", "x": 0, "y": 0, "w": 12, "h": 6, "options": { "signIn": "token" } }""", "p/d", "secret-ha-token", 200)]
+    [InlineData("""{ "id": "s", "type": "stack", "x": 0, "y": 0, "w": 6, "h": 3, "options": { "widgets": [ { "id": "a", "type": "hadash" } ] } }""", "p/s:a", "secret-ha-token", 200)]
+    [InlineData("""{ "id": "d", "type": "hadash", "x": 0, "y": 0, "w": 12, "h": 6, "options": { "signIn": "ha" } }""", "p/d", "secret-ha-token", 403)]
+    [InlineData("""{ "id": "d", "type": "ha", "x": 0, "y": 0, "w": 6, "h": 3 }""", "p/d", "secret-ha-token", 404)]
+    [InlineData("""{ "id": "d", "type": "hadash", "x": 0, "y": 0, "w": 12, "h": 6 }""", "p/other", "secret-ha-token", 404)]
+    [InlineData("""{ "id": "d", "type": "hadash", "x": 0, "y": 0, "w": 12, "h": 6 }""", "p/d", "", 409)]
+    public void TheDashboardWidgetGetsTheTokenOnlyWhenItSignsInWithIt(string widget, string key, string token, int status)
+    {
+        var c = Load($$"""
+        { "homeAssistant": { "url": "http://192.168.1.10:8123", "token": "{{token}}" },
+          "pages": [ { "id": "p", "title": "P", "widgets": [ {{widget}} ] } ] }
+        """);
+        var (got, body) = HomeAssistant.FrameSignIn(c, null, key);
+        Assert.Equal(status, got);
+        Assert.Equal(status == 200, JsonSerializer.Serialize(body).Contains("secret-ha-token"));
+    }
+
     [Fact]
     public void ThePhoneLearnsWhichShortcutPicturesAreUploads()
     {

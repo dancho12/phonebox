@@ -70,15 +70,21 @@ W.html = {
   },
 };
 
-// A Home Assistant dashboard as it is: the phone opens the server itself (the address in Settings › General, which the
-// agent sends without the token, or the widget's own), and Home Assistant signs it in as one of its users. Until the
-// server answers, the widget says so and keeps trying; when it answers again after an outage, the page is reloaded.
-// Without an address of its own the widget tries the one from Settings first, then the IP addresses the computer found
-// for a .local name: the computer may be on another network than the phone, so the first one that answers is used.
+// A Home Assistant dashboard as it is: the phone opens the server itself (the address in Settings › General, or the
+// widget's own). Until the server answers, the widget says so and keeps trying; when it answers again after an outage,
+// the page is reloaded. Without an address of its own the widget tries the one from Settings first, then the IP
+// addresses the computer found for a .local name: the computer may be on another network than the phone, so the first
+// one that answers is used.
+// Sign-in ("signIn"): by default with the token from Settings › General. The agent hands it only to this widget, and
+// the app gives it to Home Assistant's frontend the way the Home Assistant app does (MainActivity.haSignIn): no
+// password, no trusted network. "ha" leaves it to Home Assistant (its sign-in page, or a trusted network). Where the
+// app cannot (an old WebView, the browser preview), Home Assistant's own sign-in shows.
+// "kiosk" adds ?kiosk, which kiosk-mode (a Home Assistant add-on) reads to hide the header and the sidebar in this
+// frame only; without kiosk-mode it does nothing.
 const HA_DASH_PATH = /^[\w.~-]+(\/[\w.~-]+)*$/;
 W.hadash = {
   needs: [],
-  create(box, { o }) {
+  create(box, { o, page: panelPage, w }) {
     if (o.transparent !== false) box.classList.add('bare-html');
     const own = httpUrl(o.address);
     const bases = [...new Set((own ? [own] : [cfg.homeAssistant?.url, ...(cfg.homeAssistant?.alternatives || [])])
@@ -86,7 +92,21 @@ W.hadash = {
     const message = (text) => box.replaceChildren(h('div', 'empty', text));
     if (!bases.length) { message(t('w.hadash.setup')); return { update() {}, destroy() {} }; }
     const path = String(o.dashboard || '').trim().replace(/^\/+|\/+$/g, '');
-    const page = '/' + (HA_DASH_PATH.test(path) ? path : 'lovelace');
+    const page = '/' + (HA_DASH_PATH.test(path) ? path : 'lovelace') + (o.kiosk !== false ? '?kiosk' : '');
+    // 'ok' once the app holds the token (or when Home Assistant signs in itself), 'missing' without a token in Settings,
+    // '' while not known yet: the agent is asked again on the next check
+    let signIn = o.signIn === 'ha' || !bridge?.haSignIn ? 'ok' : '';
+    const signInNow = async () => {
+      try {
+        const r = await fetch(`${API}/ha/frame-sign-in?widget=${encodeURIComponent(`${panelPage.id}/${w.id}`)}`, { cache: 'no-store', headers: PANEL_HEADERS });
+        if (r.status === 409) { signIn = 'missing'; return; }
+        const token = r.ok ? (await r.json()).token : '';
+        if (!token) return;
+        const origins = [...new Set(bases.map((b) => { try { return new URL(b).origin; } catch (_) { return ''; } }).filter(Boolean))];
+        bridge.haSignIn(JSON.stringify(origins), token); // false: an old WebView, and Home Assistant's own sign-in shows
+        signIn = 'ok';
+      } catch (_) {}
+    };
     // a no-cors request: it fails only when the server cannot be reached, which is all this needs to know
     const answers = async (base) => {
       const abort = new AbortController();
@@ -96,6 +116,15 @@ W.hadash = {
     let frame = null, shown = '', down = false, timer = 0, gone = false;
     const check = async () => {
       if (gone) return;
+      if (signIn !== 'ok') await signInNow();
+      if (gone) return;
+      if (signIn === 'missing') {
+        message(t('w.hadash.noToken'));
+        frame = null;
+        signIn = '';
+        timer = setTimeout(check, 60000);
+        return;
+      }
       // the address in use first, then the others in order
       let up = '';
       for (const base of shown ? [shown, ...bases.filter((b) => b !== shown)] : bases) {
@@ -103,10 +132,10 @@ W.hadash = {
         if (gone) return;
       }
       if (gone) return;
-      if (up && (!frame || down || up !== shown)) { box.replaceChildren(); frame = webFrame(box, up + page); shown = up; }
+      if (up && signIn === 'ok' && (!frame || down || up !== shown)) { box.replaceChildren(); frame = webFrame(box, up + page); shown = up; }
       else if (!up && !frame) message(t('w.hadash.offline'));
       down = !up;
-      timer = setTimeout(check, up ? 60000 : 15000);
+      timer = setTimeout(check, up && signIn === 'ok' ? 60000 : 15000);
     };
     check();
     return { update() {}, destroy() { gone = true; clearTimeout(timer); } };

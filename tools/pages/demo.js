@@ -884,6 +884,15 @@
     if (path === '/api/ha/entities') return json({ configured: true, error: null, entities: Object.keys(ha).sort().map((id) => ({ id, name: ha[id].name, switchable: /^(light|switch|lock|scene)\./.test(id) })) });
     if (path === '/api/ha/dashboards') return json({ configured: true, error: null, phoneUrl: (await config()).homeAssistant?.url || 'http://192.168.1.10:8123', views: [
       { path: 'lovelace/0', name: 'Overview › Home' }, { path: 'desk-panel/home', name: 'Desk panel › Home' }, { path: 'desk-panel/climate', name: 'Desk panel › Climate' }] });
+    // like the agent (HomeAssistant.FrameSignIn): the token, only for a dashboard widget of a page that signs in with it
+    if (path === '/api/ha/frame-sign-in') {
+      const c = await config();
+      const [pageId, widgetId] = (q.get('widget') || '').split('/');
+      const wdg = (c.pages || []).find((p) => p.id === pageId)?.widgets?.find((x) => x.id === widgetId && x.type === 'hadash');
+      if (!wdg) return json({ error: "this Home Assistant dashboard widget isn't on an enabled page of this phone" }, 404);
+      if ((wdg.options?.signIn ?? 'token') !== 'token') return json({ error: "this widget uses Home Assistant's own sign-in" }, 403);
+      return c.homeAssistant?.token ? json({ token: c.homeAssistant.token }) : json({ error: 'no Home Assistant token in Settings › General' }, 409);
+    }
     if (path === '/api/ha/states') return json(haStates((q.get('ids') || '').split(',').filter(Boolean)));
     if (path.startsWith('/api/ha/toggle/') && method === 'POST') { haToggle(decodeURIComponent(path.slice(15))); return json({ ok: true }); }
     if (path.startsWith('/api/docker/') && method === 'POST') {
