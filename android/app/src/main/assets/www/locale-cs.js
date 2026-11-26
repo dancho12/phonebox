@@ -318,6 +318,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "w.hadash.setup": "Zadejte adresu Home Assistantu v Nastavení › Obecné nebo v tomto widgetu",
       "w.hadash.offline": "Home Assistant neodpovídá. Zkouším znovu…",
       "w.hadash.noToken": "Zadejte token Home Assistantu v Nastavení › Obecné, nebo v tomto widgetu zvolte přihlášení Home Assistantu",
+      "w.hadash.signIn": "Přihlašování do Home Assistantu…",
       "w.running": "Běhání...",
       "w.noOutput": "(žádný výstup)",
       "w.noDataYet": "Zatím žádná data",

@@ -318,6 +318,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "w.hadash.setup": "Home Assistant のアドレスを「設定 › 一般」またはこのウィジェットで指定してください",
       "w.hadash.offline": "Home Assistant が応答しません。再試行しています…",
       "w.hadash.noToken": "「設定 › 一般」で Home Assistant のトークンを設定するか、このウィジェットで Home Assistant 自身のサインインを選んでください",
+      "w.hadash.signIn": "Home Assistant にサインインしています…",
       "w.running": "実行中...",
       "w.noOutput": "(出力なし)",
       "w.noDataYet": "まだデータがありません",

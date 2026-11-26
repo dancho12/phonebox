@@ -41,9 +41,11 @@ Then add the **Home Assistant dashboard** widget to a page and pick the dashboar
   lets it in).
 - **Hide Home Assistant's header and sidebar** (on by default; needs kiosk-mode).
 - **Home Assistant address for the phone**: only when the phone reaches Home Assistant at another address than the
-  computer. With a `.local` name such as `homeassistant.local`, the phone tries the name first and then the IP
-  addresses it has on the computer, and uses the first that answers. `localhost` is not the server for the phone:
-  enter the computer's address on the network, for example `http://192.168.1.10:8123`.
+  computer, for example when Settings has `localhost` (Home Assistant on the same computer): enter the computer's
+  address on the network, such as `http://192.168.1.10:8123`, or a name the phone can find. The phone uses this
+  address alone. Without it, the phone takes the address from Settings; with a `.local` name such as
+  `homeassistant.local` it tries the name first and then the IP addresses the name has on the computer, and uses the
+  first that answers.
 - **No card background** (on by default): the dashboard's own cards are the widget.
 
 Until the server answers, the widget says so and tries again every 15 seconds. When the server answers again after
@@ -54,7 +56,8 @@ an outage, the dashboard is reloaded.
 Home Assistant's own app signs its pages in by handing Home Assistant a token ("external auth"): Home Assistant's
 frontend asks the app for one instead of showing its sign-in page. PhoneBox does the same. The agent gives the token
 from Settings only to a Home Assistant dashboard widget of that phone, never in the phone's configuration, and the app
-hands it only to pages of your Home Assistant server's addresses, and only inside the panel. The dashboard then runs as
+hands it only to pages of your Home Assistant server's addresses, only inside the panel, and only to a page the widget
+opened with `external_auth=1` (so a widget that uses Home Assistant's own sign-in on the same server gets no token). The dashboard then runs as
 the token's user: with an administrator's token, kiosk-mode hides the menus, but the user is still an administrator.
 For a panel that others can reach, make a Home Assistant user without administrator rights and choose
 **Home Assistant's own sign-in**.

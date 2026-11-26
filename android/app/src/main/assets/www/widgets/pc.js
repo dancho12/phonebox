@@ -92,7 +92,11 @@ W.hadash = {
     const message = (text) => box.replaceChildren(h('div', 'empty', text));
     if (!bases.length) { message(t('w.hadash.setup')); return { update() {}, destroy() {} }; }
     const path = String(o.dashboard || '').trim().replace(/^\/+|\/+$/g, '');
-    const page = '/' + (HA_DASH_PATH.test(path) ? path : 'lovelace') + (o.kiosk !== false ? '?kiosk' : '');
+    const page = '/' + (HA_DASH_PATH.test(path) ? path : 'lovelace');
+    // ?kiosk for kiosk-mode; external_auth=1 only once the app holds the token: the app hands it only to a page opened
+    // with it, and Home Assistant then asks the app instead of showing its sign-in page
+    let external = false;
+    const query = () => { const q = [o.kiosk !== false ? 'kiosk' : '', external ? 'external_auth=1' : ''].filter(Boolean).join('&'); return q ? '?' + q : ''; };
     // 'ok' once the app holds the token (or when Home Assistant signs in itself), 'missing' without a token in Settings,
     // '' while not known yet: the agent is asked again on the next check
     let signIn = o.signIn === 'ha' || !bridge?.haSignIn ? 'ok' : '';
@@ -103,7 +107,7 @@ W.hadash = {
         const token = r.ok ? (await r.json()).token : '';
         if (!token) return;
         const origins = [...new Set(bases.map((b) => { try { return new URL(b).origin; } catch (_) { return ''; } }).filter(Boolean))];
-        bridge.haSignIn(JSON.stringify(origins), token); // false: an old WebView, and Home Assistant's own sign-in shows
+        external = bridge.haSignIn(JSON.stringify(origins), token) === true; // false: an old WebView, and Home Assistant's own sign-in shows
         signIn = 'ok';
       } catch (_) {}
     };
@@ -132,7 +136,8 @@ W.hadash = {
         if (gone) return;
       }
       if (gone) return;
-      if (up && signIn === 'ok' && (!frame || down || up !== shown)) { box.replaceChildren(); frame = webFrame(box, up + page); shown = up; }
+      if (up && signIn === 'ok' && (!frame || down || up !== shown)) { box.replaceChildren(); frame = webFrame(box, up + page + query()); shown = up; }
+      else if (up && signIn !== 'ok') { message(t('w.hadash.signIn')); frame = null; } // the computer has not given the token yet
       else if (!up && !frame) message(t('w.hadash.offline'));
       down = !up;
       timer = setTimeout(check, up && signIn === 'ok' ? 60000 : 15000);

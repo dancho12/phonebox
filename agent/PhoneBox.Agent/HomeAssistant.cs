@@ -301,7 +301,13 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
                 // a dashboard made by a strategy (the default one, until it is taken over) has no views of its own to list
                 if (listed == 0) views.Add(new { path = root, name });
             }
-            try { await ws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, null, CancellationToken.None); } catch { /* closing is a courtesy */ }
+            // closing is a courtesy: at most two seconds, and the views are returned either way
+            try
+            {
+                using var closing = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                await ws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, null, closing.Token);
+            }
+            catch { /* the server did not answer the close in time */ }
             return new { configured = true, error = (string?)null, phoneUrl = ha.Url, alternatives = HaAddress.Alternatives(ha.Url), views };
         }
         catch (Exception ex)

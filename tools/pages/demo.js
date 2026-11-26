@@ -151,7 +151,8 @@
       // none, so only a config that sets it carries it (see bridge-overview.spec.js)
       ...(c.bridge ? { bridge: { clipboard: !!c.bridge.clipboard, supported: c.bridge.supported === true } } : {}),
       // like the agent: the Home Assistant address (never the token), only while a page has a Home Assistant dashboard widget
-      homeAssistant: (c.pages || []).some((p) => (p.widgets || []).some((w) => w.type === 'hadash')) ? { url: c.homeAssistant?.url ?? null, alternatives: c.homeAssistant?.alternatives ?? [] } : null, // alternatives: what the agent finds for a .local name
+      homeAssistant: (c.pages || []).some((p) => (p.widgets || []).some((w) => w.type === 'hadash' || (w.type === 'stack' && (w.options?.widgets || []).some((x) => x.type === 'hadash')))) ? // like the agent: also a Smart Stack card
+        { url: c.homeAssistant?.url ?? null, alternatives: c.homeAssistant?.alternatives ?? [] } : null, // alternatives: what the agent finds for a .local name
     };
   }
 
@@ -887,8 +888,7 @@
     // like the agent (HomeAssistant.FrameSignIn): the token, only for a dashboard widget of a page that signs in with it
     if (path === '/api/ha/frame-sign-in') {
       const c = await config();
-      const [pageId, widgetId] = (q.get('widget') || '').split('/');
-      const wdg = (c.pages || []).find((p) => p.id === pageId)?.widgets?.find((x) => x.id === widgetId && x.type === 'hadash');
+      const wdg = panelWidget(c, q.get('widget'), 'hadash'); // an enabled page of this phone, also a Smart Stack card
       if (!wdg) return json({ error: "this Home Assistant dashboard widget isn't on an enabled page of this phone" }, 404);
       if ((wdg.options?.signIn ?? 'token') !== 'token') return json({ error: "this widget uses Home Assistant's own sign-in" }, 403);
       return c.homeAssistant?.token ? json({ token: c.homeAssistant.token }) : json({ error: 'no Home Assistant token in Settings › General' }, 409);

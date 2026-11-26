@@ -1114,9 +1114,12 @@ class MainActivity : Activity(), SensorEventListener {
          * Home Assistant dashboard widget: signs its dashboard in with [token] (a Home Assistant access token from the
          * agent) the way the Home Assistant app does. Home Assistant's frontend asks window.externalApp for a token
          * when that object exists ("external auth"); a document-start script defines it only in frames of [origins]
-         * (a JSON array of the server's origins, added to those of earlier calls) and only inside the panel,
-         * never as the top page. True once the script is in place (the widget then loads its frame); false when this
-         * WebView cannot do it, and the widget shows Home Assistant's own sign-in instead.
+         * (a JSON array of the server's origins), only inside the panel (never as the top page), and only for a page
+         * opened with external_auth=1, which the widget adds when it signs in this way: a widget that uses Home
+         * Assistant's own sign-in on the same server gets no token. Origins of several widgets add up while the token
+         * is the same; another token (another computer, a new token in Settings) starts over, so a server registered
+         * for one token never gets another. True once the script is in place (the widget then loads its frame); false
+         * when this WebView cannot do it, and the widget shows Home Assistant's own sign-in instead.
          */
         @JavascriptInterface
         fun haSignIn(key: String, origins: String, token: String): Boolean {
@@ -1130,7 +1133,9 @@ class MainActivity : Activity(), SensorEventListener {
             runOnUiThread {
                 try {
                     if (!destroyed) {
-                        // every widget's servers (all use the token from Settings, so one script serves them all)
+                        // every widget's servers while the token is the same (they all use the token from Settings);
+                        // a new token starts over
+                        if (token != haSignInToken) { haSignInOrigins.clear(); haSignInToken = token }
                         haSignInOrigins += rules
                         haSignInScript?.remove()
                         haSignInScript = WebViewCompat.addDocumentStartJavaScript(web, haSignInBootstrap(token), haSignInOrigins.toSet())
@@ -1145,13 +1150,14 @@ class MainActivity : Activity(), SensorEventListener {
 
     private var haSignInScript: androidx.webkit.ScriptHandler? = null
     private val haSignInOrigins = mutableSetOf<String>()
+    private var haSignInToken = ""
 
     // Home Assistant's external auth (frontend src/external_app/external_auth.ts): it calls
     // externalApp.getExternalAuth('{"callback":"externalAuthSetToken"}') and waits for window[callback](true, tokens).
     // There is no externalBus, so the frontend does not expect the app's other messages.
     private fun haSignInBootstrap(token: String) = """
         (() => {
-          if (window.top === window) return;
+          if (window.top === window || !new URLSearchParams(location.search).has('external_auth')) return;
           const token = ${JSONObject.quote(token)};
           const reply = (payload, ok, data) => {
             let name = '';
