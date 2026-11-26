@@ -96,51 +96,11 @@ test('without an address of its own the widget uses the first address that answe
   await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home?kiosk');
 });
 
-// The app's bridge as the phone has it, with only the sign-in: records what the panel hands over.
-const fakeBridge = () => {
-  window.Android = { haSignIn: (key, origins, token) => { window.__haSignIn = { origins: JSON.parse(origins), token }; return true; } };
-};
-
-test('with the token from Settings the app signs the dashboard in before it loads', async ({ page, baseURL }) => {
-  const errors = []; page.on('pageerror', (e) => errors.push(String(e)));
-  await page.addInitScript(fakeBridge);
-  const server = new URL(baseURL).origin;
-  await open(page, '/panel/', { dashboard: 'desk-panel/home' }, { url: server, token: 'secret-token', alternatives: ['http://192.168.1.10:8123'] });
-  // external_auth=1: Home Assistant asks the app for the token, and only a page opened with it gets one
-  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home?kiosk&external_auth=1');
-  // the token goes to the app, for the server's origins only; it is never in the frame's address
-  expect(await page.evaluate(() => window.__haSignIn)).toEqual({ origins: [server, 'http://192.168.1.10:8123'], token: 'secret-token' });
-  await expect(page.locator('.w-hadash iframe')).not.toHaveAttribute('src', /secret/);
-  expect(errors).toEqual([]);
-});
-
-test('with Home Assistant\'s own sign-in the token is not asked for', async ({ page, baseURL }) => {
-  await page.addInitScript(fakeBridge);
-  const server = new URL(baseURL).origin;
-  await open(page, '/panel/', { dashboard: 'desk-panel/home', signIn: 'ha' }, { url: server, token: 'secret-token' });
-  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home?kiosk');
-  expect(await page.evaluate(() => window.__haSignIn ?? null)).toBeNull();
-});
-
-test('without a token in Settings the widget says what to do', async ({ page, baseURL }) => {
-  await page.addInitScript(fakeBridge);
-  const server = new URL(baseURL).origin;
-  await open(page, '/panel/', { dashboard: 'desk-panel/home' }, { url: server, token: null });
-  await expect(page.locator('.w-hadash .empty')).toHaveText("Add the Home Assistant token in Settings › General, or choose Home Assistant's own sign-in in this widget");
-  await expect(page.locator('.w-hadash iframe')).toHaveCount(0);
-});
-
-test('a WebView that cannot sign in shows Home Assistant\'s own sign-in, without external_auth', async ({ page, baseURL }) => {
-  await page.addInitScript(() => { window.Android = { haSignIn: () => false }; });
-  const server = new URL(baseURL).origin;
-  await open(page, '/panel/', { dashboard: 'desk-panel/home', kiosk: false }, { url: server, token: 'secret-token' });
-  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home');
-});
-
-test('while the sign-in has not worked the widget says so instead of a blank box', async ({ page, baseURL }) => {
-  await page.addInitScript(() => { window.Android = { haSignIn: () => { throw new Error('bridge'); } }; });
+// Home Assistant's own sign-in: no external_auth in the frame's address, and nothing asks the agent for the token
+test('the dashboard signs in on its own: no external auth, no token request', async ({ page, baseURL }) => {
+  const asked = []; page.on('request', (r) => { if (/sign-in|token/i.test(r.url())) asked.push(r.url()); });
   const server = new URL(baseURL).origin;
   await open(page, '/panel/', { dashboard: 'desk-panel/home' }, { url: server, token: 'secret-token' });
-  await expect(page.locator('.w-hadash .empty')).toHaveText('Signing in to Home Assistant…');
-  await expect(page.locator('.w-hadash iframe')).toHaveCount(0);
+  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home?kiosk');
+  expect(asked).toEqual([]);
 });

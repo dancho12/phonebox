@@ -4,11 +4,11 @@ The **Home Assistant dashboard** widget shows a Home Assistant dashboard as it i
 The phone opens the dashboard itself, from your Home Assistant server. (The **Home Assistant** widget is the other way
 round: the agent reads chosen entities with your token and the panel draws them its own way.)
 
-## Setup in four steps
+## Setup in five steps
 
 1. **PhoneBox:** in **Settings › General › Home Assistant**, enter the address and a long-lived access token
-   (Home Assistant: your profile › **Security** › **Long-lived access tokens**). The phone signs in with this token, so
-   there is no password to type on the phone and no trusted network to set up.
+   (Home Assistant: your profile › **Security** › **Long-lived access tokens**). The agent uses the token on the
+   computer to list the dashboards in the widget's settings; it never goes to the phone.
 2. **Home Assistant, two add-ons** from **Settings › Marketplace** (HACS on Home Assistant 2026.10 and older):
    - [PhoneBox embed](https://github.com/dancho12/ha-phonebox-embed) fits a dashboard to the panel: a 12 × 6 grid, no
      background, no padding. It works with any theme and changes nothing outside the panel.
@@ -30,15 +30,16 @@ round: the agent reads chosen entities with your token and the panel draws them 
    A card's size (**Layout** in its settings) is then in panel cells: 6 × 2 is half the width and a third of the
    height. The PhoneBox embed README has more, with pictures.
 
-Then add the **Home Assistant dashboard** widget to a page and pick the dashboard in its settings.
+5. **The widget, and a sign-in on the phone once:** add the **Home Assistant dashboard** widget to a page and pick
+   the dashboard in its settings. The phone shows Home Assistant's sign-in page in the widget; sign in there once, and
+   Home Assistant keeps the phone signed in. Best with a Home Assistant user of its own for the panel, without
+   administrator rights (Home Assistant: **Settings › People › Add person**, allow it to sign in). Typing is easier
+   in portrait: switch **Settings › Screen › Orientation** for the sign-in and back afterwards.
 
 ## The widget's settings
 
 - **Dashboard and view**: the dashboards and views Home Assistant lists, or **Another path…** for any
   `dashboard/view`, for example `lovelace/0`. Under the list, **The phone opens** shows the exact address.
-- **Sign-in**: **With the token from Settings › General** (the default), or **Home Assistant's own sign-in** for a
-  phone that should be a user of its own: then the phone shows Home Assistant's sign-in page once (or a trusted network
-  lets it in).
 - **Hide Home Assistant's header and sidebar** (on by default; needs kiosk-mode).
 - **Home Assistant address for the phone**: only when the phone reaches Home Assistant at another address than the
   computer, for example when Settings has `localhost` (Home Assistant on the same computer): enter the computer's
@@ -53,14 +54,14 @@ an outage, the dashboard is reloaded.
 
 ## How the sign-in works
 
-Home Assistant's own app signs its pages in by handing Home Assistant a token ("external auth"): Home Assistant's
-frontend asks the app for one instead of showing its sign-in page. PhoneBox does the same. The agent gives the token
-from Settings only to a Home Assistant dashboard widget of that phone, never in the phone's configuration, and the app
-hands it only to pages of your Home Assistant server's addresses, only inside the panel, and only to a page the widget
-opened with `external_auth=1` (so a widget that uses Home Assistant's own sign-in on the same server gets no token). The dashboard then runs as
-the token's user: with an administrator's token, kiosk-mode hides the menus, but the user is still an administrator.
-For a panel that others can reach, make a Home Assistant user without administrator rights and choose
-**Home Assistant's own sign-in**.
+The phone signs in to Home Assistant itself, like a browser: Home Assistant's sign-in page shows in the widget once,
+and Home Assistant keeps the session in the frame's own storage on the phone. The token from Settings stays on the
+computer. The dashboard runs as the user who signed in, so a user without administrator rights keeps the panel from
+changing Home Assistant's settings.
+
+Instead of a password, Home Assistant's
+[trusted networks](https://www.home-assistant.io/docs/authentication/providers/#trusted-networks) can let the phone in
+by its IP address; that needs the phone to keep the same address on your network (a reservation in the router).
 
 ## Plain http
 
