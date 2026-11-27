@@ -2244,8 +2244,13 @@ function optionField(w, o, onValChange) {
       });
       fill();
       load();
-      // the widget's own address is another field of the same inspector: follow it as it is typed
-      queueMicrotask(() => select.closest('.field')?.parentElement?.addEventListener('input', opensLine));
+      // the widget's own address and the kiosk switch are other fields of the same inspector: follow the address as it
+      // is typed, and the switch on change (its own handler stores the value first, the event then bubbles up here)
+      queueMicrotask(() => {
+        const inspector = select.closest('.field')?.parentElement;
+        inspector?.addEventListener('input', opensLine);
+        inspector?.addEventListener('change', opensLine);
+      });
       // what Home Assistant needs: two add-ons (from its Marketplace or HACS) and one setting
       // configuration.yaml, not text to translate: two lines, as it is pasted
       const FRAME_SETTING = ['http:', '  use_x_frame_options: false'].join('\n');

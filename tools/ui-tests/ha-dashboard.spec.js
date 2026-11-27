@@ -72,6 +72,13 @@ test('the settings offer the dashboards Home Assistant lists', async ({ page }) 
   await expect(other).toBeVisible();
   await other.fill('energy/0');
   await expect(opens).toContainText('http://10.0.0.5:8123/energy/0?kiosk');
+  // the kiosk switch changes the line too, both ways
+  const kiosk = page.locator('label', { hasText: "Hide Home Assistant's header and sidebar" }).locator('input');
+  await kiosk.uncheck();
+  await expect(opens).toContainText('http://10.0.0.5:8123/energy/0');
+  await expect(opens).not.toContainText('?kiosk');
+  await kiosk.check();
+  await expect(opens).toContainText('http://10.0.0.5:8123/energy/0?kiosk');
   // what Home Assistant needs, with links to the two add-ons and the guide
   await expect(page.getByRole('link', { name: 'PhoneBox embed' })).toHaveAttribute('href', 'https://github.com/dancho12/ha-phonebox-embed');
   await expect(page.getByRole('link', { name: 'kiosk-mode' })).toHaveAttribute('href', 'https://github.com/NemesisRE/kiosk-mode');

@@ -4,6 +4,8 @@ The **Home Assistant dashboard** widget shows a Home Assistant dashboard as it i
 The phone opens the dashboard itself, from your Home Assistant server. (The **Home Assistant** widget is the other way
 round: the agent reads chosen entities with your token and the panel draws them its own way.)
 
+The widget needs Android 7 or later on the phone. On Android 5 and 6 it says so instead of opening the dashboard.
+
 ## Setup in five steps
 
 1. **PhoneBox:** in **Settings › General › Home Assistant**, enter the address and a long-lived access token
