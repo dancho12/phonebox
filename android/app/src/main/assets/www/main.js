@@ -1182,11 +1182,15 @@ export function fillIcon(box, g) {
           ICON_CACHE.delete(oldest);
         }
       }
+      // a second load of the same name may finish first: drop the entry it replaces with its blob URL
+      const replaced = ICON_CACHE.get(g.name);
+      if (replaced && replaced !== img) URL.revokeObjectURL(replaced.src);
       ICON_CACHE.set(g.name, img);
       box.textContent = '';
       box.style.background = 'transparent';
       box.appendChild(img);
     };
+    img.onerror = () => { if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src); };
     // fetched with the panel header rather than as a plain <img>: otherwise any page in a widget's frame could load
     // the icon and tell from load or error whether a program runs on the computer
     fetch(`${API}/procs/icon?name=${encodeURIComponent(g.name)}`, { headers: PANEL_HEADERS })
