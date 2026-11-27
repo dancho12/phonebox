@@ -28,6 +28,12 @@
   dark-room countdown and wake hold, so a scheduled night, a dark room or a rule's night action waits until 30 seconds
   after you let go; the Stay and Go now buttons of a page switch do not count (#670,
   [Prajjwal2404](https://github.com/Prajjwal2404)).
+- **Home Assistant dashboard**: a Home Assistant dashboard as it is, with its own cards (Android 7 or later). The phone
+  opens it from the server in Settings › General (or an address of its own) and signs in to Home Assistant itself, once,
+  as a Home Assistant user; the token stays on the computer and only lists the dashboards and views to pick from in the
+  widget's settings, with what Home Assistant needs. The widget hides Home Assistant's header and sidebar with
+  kiosk-mode. While the server does not answer, the widget says so and tries again. See
+  [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md) (#620, [dancho12](https://github.com/dancho12)).
 
 ## 0.9.31 — 2026-11-27
 
