@@ -21,7 +21,8 @@ round: the agent reads chosen entities with your token and the panel draws them 
      use_x_frame_options: false
    ```
    If `configuration.yaml` already has an `http:` section, add the second line to it instead: a second `http:`
-   would replace the first, with its settings.
+   would replace the first, with its settings. The setting is for all of Home Assistant: any web page, not only the
+   panel, may then show Home Assistant in a frame.
 4. **A dashboard for the panel:** in Home Assistant, a new dashboard, view type **Sections**, the view's
    **Max number of section columns** at **1**, and one section with your cards. In its raw configuration add
    ```yaml
@@ -69,3 +70,7 @@ by its IP address; that needs the phone to keep the same address on your network
 
 Home Assistant on a home network is often plain `http`. The panel allows that: it is served over `http` inside the
 app (it never goes to the network), so the dashboard and its pictures are not blocked as mixed content.
+
+Over plain `http` the sign-in (the password) and the session travel unencrypted on the home network, as in any
+browser: a device that can watch that traffic can read them. Home Assistant over https, or trusted networks instead
+of a password, avoids sending the password; the user without administrator rights limits what a session can do.

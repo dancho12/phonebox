@@ -115,3 +115,46 @@ test('on Android 6 the dashboard is not opened', async ({ browser, baseURL }) =>
   await expect(page.locator('.w-hadash iframe')).toHaveCount(0);
   await context.close();
 });
+
+test('a dashboard on a neighbouring page does not ask Home Assistant until its page is shown', async ({ page, baseURL }) => {
+  const server = new URL(baseURL).origin;
+  const asked = []; page.on('request', (r) => { if (r.url().endsWith('/manifest.json')) asked.push(r.url()); });
+  await page.goto('/panel/');
+  await page.evaluate((c) => { localStorage.clear(); localStorage.setItem('pb-demo-config', JSON.stringify(c)); }, {
+    night: { enabled: false }, shortcuts: [], homeAssistant: { url: server, token: null }, pages: [
+      { id: 'home', title: 'Home', enabled: true, widgets: [{ id: 'n', type: 'note', x: 0, y: 0, w: 6, h: 5, options: { text: 'Home' } }] },
+      { id: 'ha', title: 'HA', enabled: true, widgets: [{ id: 'dash', type: 'hadash', x: 0, y: 0, w: 12, h: 6, options: { dashboard: 'desk-panel/home' } }] },
+    ] });
+  await page.reload();
+  await expect(page.locator('#dots i')).toHaveCount(2);
+  await page.waitForTimeout(2500);
+  expect(asked).toEqual([]);
+  await expect(page.locator('.w-hadash iframe')).toHaveCount(0);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#dots i').nth(1)).toHaveClass('on');
+  await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home?kiosk');
+  expect(asked.length).toBe(1);
+});
+
+test('the settings say so when the dashboard list cannot be refreshed', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await open(page, '/settings/#pages', { dashboard: '' });
+  await page.locator('#canvas .wb').first().click();
+  const select = page.locator('.field select').filter({ has: page.locator('option', { hasText: 'Another path…' }) });
+  await expect(select.locator('option')).toHaveCount(5);
+  const failWith = (how) => page.evaluate((how) => {
+    const inner = window.__haFetch || (window.__haFetch = window.fetch);
+    window.fetch = (input, init) => String(input).includes('/api/ha/dashboards')
+      ? (how === 'reject' ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve(new Response('no', { status: 500 })))
+      : inner(input, init);
+  }, how);
+  for (const how of ['reject', 'status']) {
+    await failWith(how);
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect(page.getByText('Could not reach the agent.')).toBeVisible();
+    await expect(select.locator('option')).toHaveCount(5); // the list from before stays
+    await page.evaluate(() => { window.fetch = window.__haFetch; });
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect(page.getByText('Could not reach the agent.')).toHaveCount(0);
+  }
+});

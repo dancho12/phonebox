@@ -270,7 +270,7 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
             await Send(new() { ["type"] = "auth", ["access_token"] = ha.Token });
             var auth = await Receive();
             if (!auth.TryGetProperty("type", out var authType) || authType.GetString() != "auth_ok")
-                return new { configured = true, error = "The token was rejected", phoneUrl = ha.Url, alternatives = HaAddress.Alternatives(ha.Url), views = Array.Empty<object>() };
+                return new { configured = true, error = "The token was rejected", phoneUrl = HaAddress.ForPhone(ha.Url), alternatives = HaAddress.Alternatives(HaAddress.ForPhone(ha.Url)), views = Array.Empty<object>() };
 
             // the default dashboard (at /lovelace, read without a url_path) and the ones added in Settings › Dashboards.
             // Newer Home Assistant versions list the default one too, with the title it was given.
@@ -314,12 +314,12 @@ public sealed class HomeAssistant(ConfigStore config, ILogger<HomeAssistant> log
                 await ws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, null, closing.Token);
             }
             catch { /* the server did not answer the close in time */ }
-            return new { configured = true, error = problem, phoneUrl = ha.Url, alternatives = HaAddress.Alternatives(ha.Url), views };
+            return new { configured = true, error = problem, phoneUrl = HaAddress.ForPhone(ha.Url), alternatives = HaAddress.Alternatives(HaAddress.ForPhone(ha.Url)), views };
         }
         catch (Exception ex)
         {
             log.LogDebug(ex, "Home Assistant dashboards");
-            return new { configured = true, error = ex is OperationCanceledException ? "Home Assistant did not answer" : ex.Message, phoneUrl = ha.Url, alternatives = HaAddress.Alternatives(ha.Url), views = Array.Empty<object>() };
+            return new { configured = true, error = ex is OperationCanceledException ? "Home Assistant did not answer" : ex.Message, phoneUrl = HaAddress.ForPhone(ha.Url), alternatives = HaAddress.Alternatives(HaAddress.ForPhone(ha.Url)), views = Array.Empty<object>() };
         }
     }
 

@@ -82,7 +82,7 @@ W.html = {
 const HA_DASH_PATH = /^[\w.~-]+(\/[\w.~-]+)*$/;
 W.hadash = {
   needs: [],
-  create(box, { o }) {
+  create(box, { o, page }) {
     if (o.transparent !== false) box.classList.add('bare-html');
     const own = httpUrl(o.address);
     const bases = [...new Set((own ? [own] : [cfg.homeAssistant?.url, ...(cfg.homeAssistant?.alternatives || [])])
@@ -91,7 +91,7 @@ W.hadash = {
     if (!bases.length) { message(t('w.hadash.setup')); return { update() {}, destroy() {} }; }
     if (!webPagesAllowed) { message(tp('A web page needs Android 7 or later')); return { update() {}, destroy() {} }; }
     const path = String(o.dashboard || '').trim().replace(/^\/+|\/+$/g, '');
-    const page = '/' + (HA_DASH_PATH.test(path) ? path : 'lovelace');
+    const dashboard = '/' + (HA_DASH_PATH.test(path) ? path : 'lovelace');
     // ?kiosk asks kiosk-mode to hide Home Assistant's header and sidebar
     const query = o.kiosk !== false ? '?kiosk' : '';
     // a no-cors request: it fails only when the server cannot be reached, which is all this needs to know
@@ -100,9 +100,14 @@ W.hadash = {
       const stop = setTimeout(() => abort.abort(), 8000);
       try { await fetch(base + '/manifest.json', { mode: 'no-cors', cache: 'no-store', signal: abort.signal }); return true; } catch (_) { return false; } finally { clearTimeout(stop); }
     };
-    let frame = null, shown = '', down = false, timer = 0, gone = false;
+    let frame = null, shown = '', down = false, timer = 0, gone = false, due = 0;
+    // Home Assistant is asked only while the widget is on screen (not on a neighbouring page, a Smart Stack card that
+    // isn't showing or with the app in the background); it catches up within a second of showing. A dashboard
+    // already open stays loaded, so that going back to the page does not sign in and load it again.
+    const visible = () => box.isConnected && !document.hidden && pages[curPage] === page && !box.closest('.stack-item:not(.active)');
     const check = async () => {
       if (gone) return;
+      if (!visible() || Date.now() < due) { timer = setTimeout(check, 1000); return; }
       // the address in use first, then the others in order
       let up = '';
       for (const base of shown ? [shown, ...bases.filter((b) => b !== shown)] : bases) {
@@ -110,10 +115,11 @@ W.hadash = {
         if (gone) return;
       }
       if (gone) return;
-      if (up && (!frame || down || up !== shown)) { box.replaceChildren(); frame = webFrame(box, up + page + query); shown = up; }
+      if (up && (!frame || down || up !== shown)) { box.replaceChildren(); frame = webFrame(box, up + dashboard + query); shown = up; }
       else if (!up && !frame) message(t('w.hadash.offline'));
       down = !up;
-      timer = setTimeout(check, up ? 60000 : 15000);
+      due = Date.now() + (up ? 60000 : 15000);
+      timer = setTimeout(check, 1000);
     };
     check();
     return { update() {}, destroy() { gone = true; clearTimeout(timer); } };

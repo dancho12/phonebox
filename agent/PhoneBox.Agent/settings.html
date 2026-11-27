@@ -2231,11 +2231,17 @@ function optionField(w, o, onValChange) {
         custom.hidden = !value || known;
         opensLine();
       };
-      const load = () => fetch('/api/ha/dashboards').then((r) => r.json()).then((d) => {
+      const load = () => fetch('/api/ha/dashboards').then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      }).then((d) => {
         answer = d; views = d.views || []; loaded = true;
         status.textContent = d.configured === false ? t('s.hadash.noServer') : d.error || '';
         fill();
-      }).catch(() => { loaded = true; fill(); });
+      }).catch(() => {
+        // the list stays as it was, with a line saying it could not be refreshed; Refresh tries again
+        loaded = true; status.textContent = t('s.phoneMic.setupFailed'); fill();
+      });
       fill();
       load();
       // the widget's own address is another field of the same inspector: follow it as it is typed
