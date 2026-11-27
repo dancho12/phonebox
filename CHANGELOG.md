@@ -14,6 +14,13 @@
 - Steam library: a cover cache folder (`appcache/librarycache`) that is itself a symbolic link or junction is refused,
   like the folders below it, so covers are never served from outside Steam's cache (#684,
   [Seyamalam](https://github.com/Seyamalam)).
+- Custom HTML: **Web page address** shows a web page instead of your own HTML, such as a Home Assistant dashboard,
+  Grafana or a camera on the home network (Android 7 or later). Plain http addresses work too (the panel is now served
+  over http inside the app, so the page and its pictures are not blocked as mixed content). The page runs in its own
+  origin and keeps its sign-in, cannot reach the panel or navigate it away, and is not clipped to the card's rounded
+  corners, because Android WebView then drops the rounded corners the page draws itself. Inside the http panel an https
+  page is not a secure context, so the few pages that need `crypto.subtle` or a service worker do not work there (#619,
+  [dancho12](https://github.com/dancho12)).
 
 ## 0.9.31 — 2026-11-27
 
