@@ -20,6 +20,8 @@ round: the agent reads chosen entities with your token and the panel draws them 
    http:
      use_x_frame_options: false
    ```
+   If `configuration.yaml` already has an `http:` section, add the second line to it instead: a second `http:`
+   would replace the first, with its settings.
 4. **A dashboard for the panel:** in Home Assistant, a new dashboard, view type **Sections**, the view's
    **Max number of section columns** at **1**, and one section with your cards. In its raw configuration add
    ```yaml
