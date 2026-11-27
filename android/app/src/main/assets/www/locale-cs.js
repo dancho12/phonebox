@@ -1956,6 +1956,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "No quota providers enabled": "Žádní povolení zprostředkovatelé kvót",
       "No second GPU": "No second GPU",
       "No wireless devices report a battery level": "Žádná bezdrátová zařízení nehlásí stav baterie",
+      "A web page needs Android 7 or later": "Webová stránka vyžaduje Android 7 nebo novější",
       "None": "Žádný",
       "Not detectable on this computer": "Není detekováno na tomto počítači",
       "Notifications": "Oznámení",

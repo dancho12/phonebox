@@ -12775,6 +12775,7 @@
       'Start': 'Iniciar',
       'Meeting timer': 'Timer de reunião',
       'No wireless devices report a battery level': 'Nenhum dispositivo sem fio informa o nível de bateria',
+      'A web page needs Android 7 or later': 'A página da web precisa do Android 7 ou mais recente',
       'OBS did not do it': 'O OBS não fez isso',
       'Turn on OBS in Settings › General': 'Ative o OBS em Configurações › Geral',
       'PAUSED': 'PAUSADO',

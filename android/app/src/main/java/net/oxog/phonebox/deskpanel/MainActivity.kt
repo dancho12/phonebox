@@ -476,6 +476,10 @@ class MainActivity : Activity(), SensorEventListener {
                 val r = assetLoader.shouldInterceptRequest(url)
                 // the panel is made of ES modules, which need a JavaScript MIME type
                 if (r != null && url.path?.endsWith(".js") == true) r.mimeType = "text/javascript"
+                // A panel page only as the app's own page, never inside a frame: a widget's page (allow-same-origin)
+                // could otherwise open a copy of the panel in a frame of its own, which the asset loader answers
+                // without the network, and that copy would run in the panel's origin.
+                if (r != null && !request.isForMainFrame && r.mimeType in DOCUMENT_TYPES) return FORBIDDEN()
                 // The panel's own host never goes to the network: over plain http someone on the network could answer
                 // it, and such a page would run in the panel's origin (with the bridge key).
                 if (r == null && url.host == ASSET_HOST) return FORBIDDEN()
@@ -550,7 +554,8 @@ class MainActivity : Activity(), SensorEventListener {
      * Only the panel itself may reach the agent. Every frame of the WebView comes through here, including the sandboxed
      * iframe of a Custom HTML widget, which is meant to talk to the panel through postMessage only. The panel sends
      * X-PhoneBox-Panel on its requests; a sandboxed frame cannot add it without a CORS preflight, which is refused.
-     * Images (album art, process icons) cannot carry headers, but they are read-only GETs.
+     * Images (album art, shortcut icons) cannot carry headers, but they are read-only GETs. Process icons are fetched
+     * with the header, since whether one loads tells which programs run on the computer.
      */
     private fun fromPanel(req: WebResourceRequest): Boolean =
         req.requestHeaders.keys.any { it.equals(PANEL_HEADER, ignoreCase = true) } ||
@@ -565,7 +570,18 @@ class MainActivity : Activity(), SensorEventListener {
         val mime = ct.substringBefore(';').trim()
         val charset = if (ct.contains("charset=")) ct.substringAfter("charset=").trim() else null
         val status = if (r.code in 100..599 && r.code !in 300..399) r.code else 502
-        return WebResourceResponse(mime, charset, status, if (status < 400) "OK" else "Error", NO_STORE, r.body)
+        // The agent's own protection headers go along: a frame can open an image route as a document, and an uploaded
+        // SVG icon would then run its script in the panel's origin without the CSP sandbox. The image routes need no
+        // panel header, so they get a sandbox even if the agent sends none.
+        val headers = NO_STORE.toMutableMap()
+        r.headers.forEach { (name, value) -> if (name.lowercase() in PASSED_HEADERS) headers[name] = value }
+        if (req.url.path in READ_ONLY_IMAGES) {
+            if (headers.keys.none { it.equals("Content-Security-Policy", ignoreCase = true) })
+                headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+            if (headers.keys.none { it.equals("X-Content-Type-Options", ignoreCase = true) })
+                headers["X-Content-Type-Options"] = "nosniff"
+        }
+        return WebResourceResponse(mime, charset, status, if (status < 400) "OK" else "Error", headers, r.body)
     }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -794,8 +810,9 @@ class MainActivity : Activity(), SensorEventListener {
     // The panel used to be served from https://$ASSET_HOST. Its localStorage (the settings kept for an offline start,
     // counters, timers, checklists) belongs to that origin, so it is copied over once, before the panel first starts on
     // http: read on an empty page of the old origin, written on one of the new, keeping anything already there. After a
-    // failed attempt the old entries win: what the new origin has then was written after that failure (a counter that
-    // started over), and the old value must not be lost.
+    // failed attempt the old entries not yet copied win: what the new origin has for them was written after that failure
+    // (a counter that started over), and the old value must not be lost. Entries already copied are listed under
+    // MOVED_KEYS in the new origin and are never written again, so a change made since is kept.
     private var storageMove = 0 // 1: reading the old origin, 2: writing to the new one, 0: done
     private var movedStorage = "null"
 
@@ -816,8 +833,12 @@ class MainActivity : Activity(), SensorEventListener {
             storageMove = 0
             val overwrite = panelPreferences.getBoolean(STORAGE_MOVE_FAILED, false)
             val write = "(() => { try { const old = JSON.parse($movedStorage) || {};" +
-                " for (const [k, v] of Object.entries(old)) if ($overwrite || localStorage.getItem(k) === null) localStorage.setItem(k, v);" +
-                " return true; } catch (_) { return false; } })()"
+                " const done = new Set(JSON.parse(localStorage.getItem('$MOVED_KEYS') || '[]'));" +
+                " for (const [k, v] of Object.entries(old)) {" +
+                "  if (k === '$MOVED_KEYS' || done.has(k)) continue;" +
+                "  if ($overwrite || localStorage.getItem(k) === null) localStorage.setItem(k, v);" +
+                "  done.add(k); localStorage.setItem('$MOVED_KEYS', JSON.stringify([...done])); }" +
+                " localStorage.removeItem('$MOVED_KEYS'); return true; } catch (_) { return false; } })()"
             view.evaluateJavascript(write) { written ->
                 if (destroyed) return@evaluateJavascript
                 // done only when the old entries were read and all written; otherwise the next start tries again, and
@@ -1095,10 +1116,13 @@ class MainActivity : Activity(), SensorEventListener {
         private const val PANEL_ORIGIN = "http://$ASSET_HOST"
         private const val STORAGE_MOVED = "storage-moved-to-http"
         private const val STORAGE_MOVE_FAILED = "storage-move-to-http-failed"
+        private const val MOVED_KEYS = "phonebox-storage-move-done"
         private val NO_STORE = mapOf("Cache-Control" to "no-store")
         private const val PANEL_HEADER = "X-PhoneBox-Panel"
-        private val READ_ONLY_IMAGES = setOf("/agent/api/art", "/agent/api/procs/icon", "/agent/api/controls/radio-logo", "/agent/api/apps/icon", "/agent/api/discord/img", "/agent/api/shortcuts/icon",
+        private val READ_ONLY_IMAGES = setOf("/agent/api/art", "/agent/api/controls/radio-logo", "/agent/api/apps/icon", "/agent/api/discord/img", "/agent/api/shortcuts/icon",
             "/agent/api/steam/cover", "/agent/api/wallpaper")
+        private val PASSED_HEADERS = setOf("content-security-policy", "x-content-type-options")
+        private val DOCUMENT_TYPES = setOf("text/html", "application/xhtml+xml", "image/svg+xml", "text/xml", "application/xml")
         private fun FORBIDDEN() = WebResourceResponse("text/plain", "utf-8", 403, "Forbidden", NO_STORE, java.io.ByteArrayInputStream(ByteArray(0)))
     }
 }

@@ -1956,6 +1956,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "No quota providers enabled": "Tidak ada penyedia kuota yang diaktifkan",
       "No second GPU": "Tak ada GPU kedua",
       "No wireless devices report a battery level": "Tidak ada perangkat nirkabel yang melaporkan tingkat baterai",
+      "A web page needs Android 7 or later": "Halaman web memerlukan Android 7 atau yang lebih baru",
       "None": "Tidak ada",
       "Not detectable on this computer": "Tidak dapat dideteksi pada komputer ini",
       "Notifications": "Notifikasi",

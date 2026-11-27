@@ -1177,14 +1177,22 @@ export function fillIcon(box, g) {
     img.onload = () => {
       if (ICON_CACHE.size >= MAX_ICON_CACHE) {
         const oldest = ICON_CACHE.keys().next().value;
-        if (oldest !== undefined) ICON_CACHE.delete(oldest);
+        if (oldest !== undefined) {
+          URL.revokeObjectURL(ICON_CACHE.get(oldest).src);
+          ICON_CACHE.delete(oldest);
+        }
       }
       ICON_CACHE.set(g.name, img);
       box.textContent = '';
       box.style.background = 'transparent';
       box.appendChild(img);
     };
-    img.src = `${API}/procs/icon?name=${encodeURIComponent(g.name)}`;
+    // fetched with the panel header rather than as a plain <img>: otherwise any page in a widget's frame could load
+    // the icon and tell from load or error whether a program runs on the computer
+    fetch(`${API}/procs/icon?name=${encodeURIComponent(g.name)}`, { headers: PANEL_HEADERS })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => { if (blob) img.src = URL.createObjectURL(blob); })
+      .catch(() => {});
   }
 }
 

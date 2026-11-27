@@ -1326,6 +1326,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "No quota providers enabled": "Kota sağlayıcıları etkinleştirilmedi",
       "No second GPU": "İkinci GPU yok.",
       "No wireless devices report a battery level": "Kablosuz cihazlar pil seviyesini bildirmiyor",
+      "A web page needs Android 7 or later": "Web sayfası için Android 7 veya üstü gerekir",
       "None": "Hiçbiri",
       "Not detectable on this computer": "Bu bilgisayarda tespit edilemedi",
       "Notifications": "İletişim",

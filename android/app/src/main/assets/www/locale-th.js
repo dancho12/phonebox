@@ -1956,6 +1956,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "No quota providers enabled": "ไม่มีการเปิดใช้งานตัวจัดหาคูณ",
       "No second GPU": "ไม่มีสอง GPU",
       "No wireless devices report a battery level": "ไม่มีอุปกรณ์ไร้สายรายงานระดับแบตเตอรี่",
+      "A web page needs Android 7 or later": "หน้าเว็บต้องใช้ Android 7 ขึ้นไป",
       "None": "ไม่มี",
       "Not detectable on this computer": "ยังไม่สามารถตรวจสอบบนเครื่องนี้ได้",
       "Notifications": "การแจ้งเตือน",

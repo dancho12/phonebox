@@ -24,6 +24,13 @@ W.html = {
     // cookies (a Home Assistant dashboard needs them) yet cannot reach the panel; it may not navigate the panel away.
     // No popups either: the app has no second window, so a link opening one would replace the panel.
     const url = typeof o.url === 'string' && /^https?:\/\//i.test(o.url.trim()) ? o.url.trim() : '';
+    // Android 5 and 6 do not read network_security_config, which keeps a redirect from bringing someone else's page
+    // to the panel's http address, so a web page is not shown there.
+    const android = /Android (\d+)/.exec(navigator.userAgent);
+    if (url && android && Number(android[1]) < 7) {
+      box.append(h('div', 'empty', tp('A web page needs Android 7 or later')));
+      return { update() {}, destroy() {} };
+    }
     if (url) {
       frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads');
       frame.setAttribute('allow', 'fullscreen; autoplay');
