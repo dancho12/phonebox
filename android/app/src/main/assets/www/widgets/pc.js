@@ -89,6 +89,7 @@ W.hadash = {
       .map(httpUrl).filter(Boolean).map((b) => b.replace(/\/+$/, '')))];
     const message = (text) => box.replaceChildren(h('div', 'empty', text));
     if (!bases.length) { message(t('w.hadash.setup')); return { update() {}, destroy() {} }; }
+    if (!webPagesAllowed) { message(tp('A web page needs Android 7 or later')); return { update() {}, destroy() {} }; }
     const path = String(o.dashboard || '').trim().replace(/^\/+|\/+$/g, '');
     const page = '/' + (HA_DASH_PATH.test(path) ? path : 'lovelace');
     // ?kiosk asks kiosk-mode to hide Home Assistant's header and sidebar
