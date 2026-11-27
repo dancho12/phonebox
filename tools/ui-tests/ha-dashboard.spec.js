@@ -105,3 +105,13 @@ test('the dashboard signs in on its own: no external auth, no token request', as
   await expect(page.locator('.w-hadash iframe')).toHaveAttribute('src', server + '/desk-panel/home?kiosk');
   expect(asked).toEqual([]);
 });
+
+test('on Android 6 the dashboard is not opened', async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL,
+    userAgent: 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5 Build/M4B30Z; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/95.0.4638.74 Mobile Safari/537.36' });
+  const page = await context.newPage();
+  await open(page, '/panel/', { address: new URL(baseURL).origin });
+  await expect(page.locator('.w-hadash .empty')).toHaveText('A web page needs Android 7 or later');
+  await expect(page.locator('.w-hadash iframe')).toHaveCount(0);
+  await context.close();
+});
